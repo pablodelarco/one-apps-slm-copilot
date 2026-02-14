@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNebula marketplace
-**Current focus:** Phase 2 - Security & Access (plan 01 complete, plan 02 next)
+**Current focus:** Phase 2 complete. Ready for Phase 3 - OpenNebula Integration.
 
 ## Current Position
 
-Phase: 2 of 4 (Security & Access)
-Plan: 1 of 2 in current phase
-Status: Plan 02-01 complete, ready for 02-02
-Last activity: 2026-02-14 — Completed 02-01 (Nginx reverse proxy with TLS, auth, CORS, SSE)
+Phase: 2 of 4 (Security & Access) -- COMPLETE
+Plan: 2 of 2 in current phase (all done)
+Status: Phase 2 complete, ready for Phase 3
+Last activity: 2026-02-14 — Completed 02-02 (Let's Encrypt automation with graceful fallback)
 
-Progress: [████░░░░░░] 40%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 2 min
-- Total execution time: 0.15 hours
+- Total execution time: 0.18 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-inference-engine | 3/3 | 6 min | 2 min |
-| 02-security-access | 1/2 | 3 min | 3 min |
+| 02-security-access | 2/2 | 5 min | 2.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (2 min), 02-01 (3 min)
+- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (2 min), 02-01 (3 min), 02-02 (2 min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -63,6 +63,10 @@ Recent decisions affecting current work:
 - [02-01]: gzip off in location block prevents gzip from buffering SSE output
 - [02-01]: CORS wildcard origin acceptable (basic auth password IS the access control)
 - [02-01]: ONEAPP_COPILOT_DOMAIN validation only when non-empty (empty = skip Let's Encrypt)
+- [02-02]: certbot --webroot mode (nginx stays running, serves ACME challenge on port 80)
+- [02-02]: --register-unsafely-without-email (ephemeral VMs, no email needed)
+- [02-02]: Let's Encrypt failure is a WARNING, never an error (service always works with self-signed)
+- [02-02]: Deploy hook in /etc/letsencrypt/renewal-hooks/deploy/ for automatic nginx reload on renewal
 
 ### Pending Todos
 
@@ -70,11 +74,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Research flags Let's Encrypt edge cases in OpenNebula VMs (Phase 2) — standard certbot may not cover VM networking context
 - RAM footprint with full context window is tight on 32 GB VM (14.3 GB model + KV cache) — default to 32K context, not 128K
 
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 02-01-PLAN.md (Nginx reverse proxy). Ready for 02-02 (Let's Encrypt).
+Stopped at: Completed 02-02-PLAN.md (Let's Encrypt). Phase 2 complete. Ready for Phase 3.
 Resume file: None
