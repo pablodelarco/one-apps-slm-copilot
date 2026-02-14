@@ -28,6 +28,10 @@ ONE_SERVICE_RECONFIGURABLE=true
 ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'          '32768'
     'ONEAPP_COPILOT_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)' '0'
+
+    # Phase 2: Security & Access
+    'ONEAPP_COPILOT_PASSWORD'      'configure' 'API password (auto-generated if empty)'      ''
+    'ONEAPP_COPILOT_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
 )
 
 # --------------------------------------------------------------------------
@@ -35,6 +39,8 @@ ONE_SERVICE_PARAMS=(
 # --------------------------------------------------------------------------
 ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-32768}"
 ONEAPP_COPILOT_THREADS="${ONEAPP_COPILOT_THREADS:-0}"
+ONEAPP_COPILOT_PASSWORD="${ONEAPP_COPILOT_PASSWORD:-}"
+ONEAPP_COPILOT_DOMAIN="${ONEAPP_COPILOT_DOMAIN:-}"
 
 # --------------------------------------------------------------------------
 # Constants
