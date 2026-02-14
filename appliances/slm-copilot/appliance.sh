@@ -51,6 +51,9 @@ readonly LOCALAI_GGUF_FILE="devstral-small-2-q4km.gguf"
 readonly LOCALAI_GGUF_URL="https://huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
 readonly LOCALAI_UID=49999
 readonly LOCALAI_GID=49999
+readonly NGINX_CONF="/etc/nginx/sites-available/slm-copilot.conf"
+readonly NGINX_CERT_DIR="/etc/ssl/slm-copilot"
+readonly NGINX_HTPASSWD="/etc/nginx/.htpasswd"
 
 # ==========================================================================
 #  LIFECYCLE: service_install  (Packer build-time, runs once)
@@ -62,6 +65,15 @@ service_install() {
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     apt-get install -y -qq jq >/dev/null
+
+    # Phase 2: Install Nginx, htpasswd tool, and certbot
+    apt-get install -y -qq nginx apache2-utils certbot >/dev/null
+
+    # Remove default nginx site (conflicts with our config)
+    rm -f /etc/nginx/sites-enabled/default
+
+    # Create ACME challenge directory for certbot webroot
+    mkdir -p /var/www/acme-challenge
 
     # 2. Create system user and group
     groupadd --system --gid "${LOCALAI_GID}" localai 2>/dev/null || true
