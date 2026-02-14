@@ -55,7 +55,36 @@ readonly LOCALAI_GID=49999
 # ==========================================================================
 service_install() {
     msg info "Installing SLM-Copilot appliance components"
-    # Implemented in Task 2
+
+    # 1. Install runtime dependencies
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq jq >/dev/null
+
+    # 2. Create system user and group
+    groupadd --system --gid "${LOCALAI_GID}" localai 2>/dev/null || true
+    useradd --system --uid "${LOCALAI_UID}" --gid "${LOCALAI_GID}" \
+        --home-dir "${LOCALAI_BASE_DIR}" --shell /usr/sbin/nologin localai 2>/dev/null || true
+
+    # 3. Create directory structure
+    mkdir -p "${LOCALAI_BASE_DIR}/bin" \
+             "${LOCALAI_MODELS_DIR}" \
+             "${LOCALAI_CONFIG_DIR}"
+
+    # 4. Download LocalAI binary
+    msg info "Downloading LocalAI v${LOCALAI_VERSION} binary"
+    curl -fSL -o "${LOCALAI_BIN}" \
+        "https://github.com/mudler/LocalAI/releases/download/v${LOCALAI_VERSION}/local-ai-Linux-x86_64"
+    chmod +x "${LOCALAI_BIN}"
+
+    # 5. Pre-install llama-cpp backend (INFER-09)
+    msg info "Pre-installing llama-cpp backend"
+    "${LOCALAI_BIN}" backends install llama-cpp
+
+    # 6. Set ownership
+    chown -R "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_BASE_DIR}"
+
+    msg info "SLM-Copilot appliance install complete (LocalAI v${LOCALAI_VERSION})"
 }
 
 # ==========================================================================
