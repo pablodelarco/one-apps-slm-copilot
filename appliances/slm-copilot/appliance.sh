@@ -227,6 +227,9 @@ service_bootstrap() {
     systemctl enable nginx
     systemctl restart nginx
 
+    # Phase 2: Attempt Let's Encrypt if domain is configured (SEC-06, SEC-07)
+    attempt_letsencrypt
+
     msg info "SLM-Copilot bootstrap complete -- LocalAI on 127.0.0.1:8080, Nginx on 0.0.0.0:443"
 }
 
