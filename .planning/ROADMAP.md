@@ -46,7 +46,7 @@ Plans:
   3. An OPTIONS preflight request to any API endpoint returns HTTP 204 with CORS headers and requires no authentication
   4. When ONEAPP_COPILOT_DOMAIN is set to a valid FQDN with DNS and port 80 open, the appliance serves a Let's Encrypt certificate; when certbot fails, it falls back to self-signed without breaking the service
   5. `curl http://<vm-ip>/anything` redirects to `https://<vm-ip>/anything` with HTTP 301
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
 - [x] 02-01: Nginx installation, self-signed TLS, and reverse proxy with SSE streaming
@@ -62,11 +62,11 @@ Plans:
   3. Rebooting the VM three times in a row produces identical service behavior each time (idempotent configure)
   4. All appliance operations (install, configure, bootstrap) are logged to `/var/log/one-appliance/slm-copilot.log` with timestamps
   5. SSH login to the VM displays a one-appliance banner showing service status and connection information
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01: Context variable framework, service_configure, and idempotent config generation
-- [ ] 03-02: Report file, Cline snippet, logging, banner, and marketplace metadata text
+- [ ] 03-01-PLAN.md — Dedicated logging (log_copilot wrapper, COPILOT_LOG), replace all msg calls
+- [ ] 03-02-PLAN.md — Report file, Cline snippet, SSH banner, and marketplace metadata YAML
 
 ### Phase 4: Build & Distribution
 **Goal**: A new user can build the QCOW2 image from source, deploy it to any OpenNebula cloud, validate it works, and submit it to the community marketplace
