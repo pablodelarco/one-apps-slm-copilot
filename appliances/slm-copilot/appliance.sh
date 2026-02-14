@@ -618,3 +618,46 @@ NGINX_EOF
 
     msg info "Nginx config written to ${NGINX_CONF}"
 }
+
+# ==========================================================================
+#  HELPER: attempt_letsencrypt  (certbot --webroot with graceful fallback)
+# ==========================================================================
+attempt_letsencrypt() {
+    local _domain="${ONEAPP_COPILOT_DOMAIN:-}"
+
+    if [ -z "${_domain}" ]; then
+        msg info "ONEAPP_COPILOT_DOMAIN not set -- using self-signed certificate"
+        return 0
+    fi
+
+    msg info "Attempting Let's Encrypt certificate for ${_domain}"
+
+    # Ensure webroot directory structure exists
+    mkdir -p /var/www/acme-challenge/.well-known/acme-challenge
+
+    if certbot certonly \
+        --non-interactive \
+        --agree-tos \
+        --register-unsafely-without-email \
+        --webroot \
+        -w /var/www/acme-challenge \
+        -d "${_domain}" 2>&1; then
+
+        # Success: switch active symlinks to Let's Encrypt certs
+        ln -sf "/etc/letsencrypt/live/${_domain}/fullchain.pem" "${NGINX_CERT_DIR}/cert.pem"
+        ln -sf "/etc/letsencrypt/live/${_domain}/privkey.pem" "${NGINX_CERT_DIR}/key.pem"
+        nginx -s reload
+        msg info "Let's Encrypt certificate installed for ${_domain}"
+
+        # Set up renewal deploy hook (nginx reload on cert renewal)
+        mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+        cat > /etc/letsencrypt/renewal-hooks/deploy/nginx-reload.sh <<'HOOK'
+#!/bin/bash
+nginx -s reload
+HOOK
+        chmod +x /etc/letsencrypt/renewal-hooks/deploy/nginx-reload.sh
+    else
+        msg warning "Let's Encrypt failed for ${_domain} -- keeping self-signed certificate"
+        msg warning "Ensure: DNS resolves ${_domain} to this VM, port 80 is reachable from internet"
+    fi
+}
