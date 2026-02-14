@@ -9,28 +9,28 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 ## Current Position
 
-Phase: 1 of 4 (Inference Engine)
-Plan: 2 of 3 in current phase
-Status: Executing phase
-Last activity: 2026-02-14 — Completed 01-02 (model download, config generation + bootstrap)
+Phase: 1 of 4 (Inference Engine) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-14 — Completed 01-03 (validation, smoke tests + production polish)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
+- Total plans completed: 3
 - Average duration: 2 min
-- Total execution time: 0.07 hours
+- Total execution time: 0.10 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-inference-engine | 2/3 | 4 min | 2 min |
+| 01-inference-engine | 3/3 | 6 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (2 min)
+- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (2 min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -51,6 +51,10 @@ Recent decisions affecting current work:
 - [01-02]: daemon-reload in service_configure, not service_bootstrap
 - [01-02]: OOMScoreAdjust=-500 to protect from OOM killer on 32 GB VMs
 - [01-02]: All config heredocs use > overwrite for idempotency
+- [01-03]: validate_config placed as first call in service_configure for fail-fast
+- [01-03]: smoke_test returns 1 (not exit 1) so callers handle cleanup before exiting
+- [01-03]: SC2034 disabled globally for ONE_SERVICE_* framework variables
+- [01-03]: Context size 131072 gets warning not error (may work on large VMs)
 
 ### Pending Todos
 
@@ -64,5 +68,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 01-02-PLAN.md (model download, config generation + bootstrap)
+Stopped at: Completed 01-03-PLAN.md (validation, smoke tests + production polish) -- Phase 1 COMPLETE
 Resume file: None
