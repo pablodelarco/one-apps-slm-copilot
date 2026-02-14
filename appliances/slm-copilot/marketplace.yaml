@@ -1,0 +1,81 @@
+---
+name: SLM-Copilot 1.0.0
+version: 1.0.0
+publisher: OpenNebula Systems
+description: |-
+  One-click sovereign AI coding assistant powered by
+  [Devstral Small 2](https://mistral.ai/products/devstral) (24B, Mistral AI)
+  running on CPU via [LocalAI](https://localai.io/). Not all AI needs GPU --
+  this 24B parameter model delivers practical coding assistance on any 32 GB
+  VM with 16+ vCPUs. Import, instantiate, code.
+
+  **European Sovereign AI** -- 100% open-source stack built by European
+  companies: Mistral AI (Paris) for the model, OpenNebula (Madrid) for
+  the cloud platform. 100% sovereign: your code stays in your jurisdiction,
+  your data never leaves your infrastructure. All components under
+  Apache 2.0 license.
+
+  Connect from VS Code with the [Cline](https://cline.bot) extension for
+  AI-assisted coding: code analysis, refactoring, test generation, bug fixes.
+  One-click deployment from the OpenNebula marketplace to a running copilot
+  in minutes.
+
+  **Features:**
+  - OpenAI-compatible API (chat completions with streaming)
+  - HTTPS with auto-generated TLS certificate
+  - Optional Let's Encrypt for production domains
+  - Basic authentication with auto-generated passwords
+  - Fully configurable via OpenNebula context variables
+  - Report file with connection details and Cline setup guide
+  - Idempotent reconfiguration on every boot
+short_description: >-
+  Sovereign AI coding copilot (Devstral Small 2 24B on CPU).
+  No GPU required. European open-source. One-click deployment.
+tags:
+  - ai
+  - llm
+  - coding
+  - copilot
+  - sovereign
+  - cpu
+  - localai
+  - devstral
+  - cline
+  - ubuntu
+format: qcow2
+creation_time: 1739500800
+os-id: Ubuntu
+os-release: '24.04 LTS'
+os-arch: x86_64
+hypervisor: KVM
+opennebula_version: 6.10, 7.0
+opennebula_template:
+  CONTEXT:
+    NETWORK: 'YES'
+    SSH_PUBLIC_KEY: "$USER[SSH_PUBLIC_KEY]"
+    ONEAPP_COPILOT_CONTEXT_SIZE: '32768'
+    ONEAPP_COPILOT_THREADS: '0'
+    ONEAPP_COPILOT_PASSWORD: ''
+    ONEAPP_COPILOT_DOMAIN: ''
+  CPU: '16'
+  CPU_MODEL:
+    MODEL: host-passthrough
+  GRAPHICS:
+    LISTEN: 0.0.0.0
+    TYPE: vnc
+  MEMORY: '32768'
+  NIC:
+    NETWORK: service
+  NIC_DEFAULT:
+    MODEL: virtio
+logo: slm-copilot.png
+images:
+  - name: slm_copilot_os
+    url: 'https://PUBLISH_URL/slm-copilot-1.0.0.qcow2'
+    type: OS
+    dev_prefix: vd
+    driver: qcow2
+    size: 26843545600
+    checksum:
+      md5: 'PLACEHOLDER'
+      sha256: 'PLACEHOLDER'
