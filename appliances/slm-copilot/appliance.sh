@@ -81,7 +81,77 @@ service_install() {
     msg info "Pre-installing llama-cpp backend"
     "${LOCALAI_BIN}" backends install llama-cpp
 
-    # 6. Set ownership
+    # 6. Download GGUF model (INFER-03)
+    msg info "Downloading Devstral Small 2 Q4_K_M model (~14.3 GB)"
+    curl -fSL -C - -o "${LOCALAI_MODELS_DIR}/${LOCALAI_GGUF_FILE}" \
+        "${LOCALAI_GGUF_URL}"
+
+    # Verify download size
+    local _file_size
+    _file_size=$(stat -c%s "${LOCALAI_MODELS_DIR}/${LOCALAI_GGUF_FILE}")
+    if [ "${_file_size}" -lt 14000000000 ]; then
+        msg error "GGUF file is only ${_file_size} bytes -- expected ~14.3 GB. Download may be corrupted."
+        exit 1
+    fi
+    msg info "GGUF model downloaded ($((_file_size / 1073741824)) GB)"
+
+    # 7. Build-time pre-warming (INFER-09 verification)
+    # Generate a minimal model YAML for pre-warming
+    cat > "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml" <<YAML
+name: ${LOCALAI_MODEL_NAME}
+backend: llama-cpp
+parameters:
+  model: ${LOCALAI_GGUF_FILE}
+context_size: 2048
+threads: 2
+mmap: true
+mmlock: false
+use_jinja: true
+YAML
+
+    msg info "Pre-warming: starting LocalAI for build-time verification"
+    "${LOCALAI_BIN}" run \
+        --address 127.0.0.1:8080 \
+        --models-path "${LOCALAI_MODELS_DIR}" \
+        --disable-webui &
+    local _prewarm_pid=$!
+
+    # Wait for readiness (model loading can take 60-180s on CPU)
+    local _elapsed=0
+    while ! curl -sf http://127.0.0.1:8080/readyz >/dev/null 2>&1; do
+        sleep 5
+        _elapsed=$((_elapsed + 5))
+        if [ "${_elapsed}" -ge 300 ]; then
+            msg error "Pre-warm: LocalAI not ready after 300s"
+            kill "${_prewarm_pid}" 2>/dev/null || true
+            wait "${_prewarm_pid}" 2>/dev/null || true
+            exit 1
+        fi
+    done
+    msg info "Pre-warm: LocalAI ready (${_elapsed}s)"
+
+    # Test inference
+    local _response
+    _response=$(curl -sf http://127.0.0.1:8080/v1/chat/completions \
+        -H 'Content-Type: application/json' \
+        -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":5}")
+    echo "${_response}" | jq -e '.choices[0].message.content' >/dev/null 2>&1 || {
+        msg error "Pre-warm smoke test failed: no content in response"
+        kill "${_prewarm_pid}" 2>/dev/null || true
+        wait "${_prewarm_pid}" 2>/dev/null || true
+        exit 1
+    }
+    msg info "Pre-warm smoke test passed"
+
+    # Clean shutdown
+    kill "${_prewarm_pid}"
+    wait "${_prewarm_pid}" 2>/dev/null || true
+    msg info "Pre-warm: LocalAI shut down"
+
+    # Remove pre-warm model YAML (service_configure generates the real one)
+    rm -f "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml"
+
+    # 8. Set ownership
     chown -R "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_BASE_DIR}"
 
     msg info "SLM-Copilot appliance install complete (LocalAI v${LOCALAI_VERSION})"
