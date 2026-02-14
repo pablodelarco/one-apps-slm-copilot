@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNebula marketplace
-**Current focus:** Phase 3 - OpenNebula Integration (Phases 1-2 complete)
+**Current focus:** Phase 3 - OpenNebula Integration (Plan 01 complete, Plan 02 next)
 
 ## Current Position
 
-Phase: 2 of 4 (Security & Access) -- COMPLETE
-Plan: 2 of 2 in current phase (all done)
-Status: Phase 2 complete, ready for Phase 3
-Last activity: 2026-02-14 — Completed 02-02 (Let's Encrypt automation with graceful fallback)
+Phase: 3 of 4 (OpenNebula Integration)
+Plan: 1 of 2 in current phase
+Status: Plan 03-01 complete, ready for Plan 03-02
+Last activity: 2026-02-14 — Completed 03-01 (dedicated application logging)
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 2 min
-- Total execution time: 0.18 hours
+- Total plans completed: 6
+- Average duration: 2.5 min
+- Total execution time: 0.25 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [██████░░░░] 60%
 |-------|-------|-------|----------|
 | 01-inference-engine | 3/3 | 6 min | 2 min |
 | 02-security-access | 2/2 | 5 min | 2.5 min |
+| 03-opennebula-integration | 1/2 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (2 min), 02-01 (3 min), 02-02 (2 min)
+- Last 5 plans: 01-02 (2 min), 01-03 (2 min), 02-01 (3 min), 02-02 (2 min), 03-01 (4 min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -67,6 +68,9 @@ Recent decisions affecting current work:
 - [02-02]: --register-unsafely-without-email (ephemeral VMs, no email needed)
 - [02-02]: Let's Encrypt failure is a WARNING, never an error (service always works with self-signed)
 - [02-02]: Deploy hook in /etc/letsencrypt/renewal-hooks/deploy/ for automatic nginx reload on renewal
+- [03-01]: log_copilot wrapper over msg (not exec/tee redirect) to avoid interfering with one-apps pipe mechanism
+- [03-01]: init_copilot_log called in all three lifecycle entry points for robustness across stage boundaries
+- [03-01]: Uppercase log level via ${_level^^} for consistent log file format
 
 ### Pending Todos
 
@@ -79,5 +83,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 02-02-PLAN.md (Let's Encrypt). Phase 2 complete. Ready for Phase 3.
+Stopped at: Completed 03-01-PLAN.md (dedicated logging). Ready for 03-02 (report file, SSH banner, marketplace metadata).
 Resume file: None
