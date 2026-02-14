@@ -1,3 +1,12 @@
+# SLM-Copilot Marketplace Metadata
+#
+# After a successful build, update these PLACEHOLDER values:
+#   1. images[0].url          -- Replace PUBLISH_URL with actual hosting URL
+#   2. images[0].checksum.md5 -- From: md5sum build/export/slm-copilot-1.0.0.qcow2
+#   3. images[0].checksum.sha256 -- From: sha256sum build/export/slm-copilot-1.0.0.qcow2
+#   4. images[0].size         -- From: qemu-img info --output=json build/export/slm-copilot-1.0.0.qcow2 | jq '.["virtual-size"]'
+#   5. Rename this file to a UUID for marketplace PR: cp marketplace.yaml $(uuidgen).yaml
+#
 ---
 name: SLM-Copilot 1.0.0
 version: 1.0.0
