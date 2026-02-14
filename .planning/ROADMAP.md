@@ -29,12 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `curl localhost:8080/readyz` returns HTTP 200 when the model is loaded and ready for inference
   4. After a VM reboot, the LocalAI systemd service starts automatically and recovers from a simulated crash (kill -9) within 30 seconds
   5. LocalAI is unreachable from any network interface except 127.0.0.1 (verified by attempting connection from external IP)
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 01-01: Appliance script skeleton and LocalAI binary installation
-- [ ] 01-02: Model download, configuration, backend pre-warming, and systemd service
-- [ ] 01-03: Context variable wiring (threads, context size) and smoke tests
+- [ ] 01-01-PLAN.md — Appliance script skeleton and LocalAI binary installation
+- [ ] 01-02-PLAN.md — Model download, configuration, backend pre-warming, and systemd service
+- [ ] 01-03-PLAN.md — Context variable validation, smoke tests, and shellcheck compliance
 
 ### Phase 2: Security & Access
 **Goal**: A developer can connect to the appliance over HTTPS with authentication and receive streaming code completions through the Nginx proxy
@@ -92,7 +92,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Inference Engine | 0/3 | Not started | - |
+| 1. Inference Engine | 0/3 | Planned | - |
 | 2. Security & Access | 0/2 | Not started | - |
 | 3. OpenNebula Integration | 0/2 | Not started | - |
 | 4. Build & Distribution | 0/3 | Not started | - |
