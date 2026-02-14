@@ -12,7 +12,7 @@ This roadmap delivers a production-ready OpenNebula marketplace appliance for so
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Inference Engine** - LocalAI serves Devstral Small 2 on CPU with streaming, health checks, and systemd management
+- [x] **Phase 1: Inference Engine** - LocalAI serves Devstral Small 2 on CPU with streaming, health checks, and systemd management ✓ (2026-02-14)
 - [ ] **Phase 2: Security & Access** - Nginx reverse proxy with TLS, authentication, CORS, and SSE streaming support
 - [ ] **Phase 3: OpenNebula Integration** - Context variable-driven configuration, report file, idempotent lifecycle, and logging
 - [ ] **Phase 4: Build & Distribution** - Packer image build, test suite, marketplace metadata, and documentation
@@ -32,9 +32,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Appliance script skeleton and LocalAI binary installation
-- [ ] 01-02-PLAN.md — Model download, configuration, backend pre-warming, and systemd service
-- [ ] 01-03-PLAN.md — Context variable validation, smoke tests, and shellcheck compliance
+- [x] 01-01-PLAN.md — Appliance script skeleton and LocalAI binary installation
+- [x] 01-02-PLAN.md — Model download, configuration, backend pre-warming, and systemd service
+- [x] 01-03-PLAN.md — Context variable validation, smoke tests, and shellcheck compliance
 
 ### Phase 2: Security & Access
 **Goal**: A developer can connect to the appliance over HTTPS with authentication and receive streaming code completions through the Nginx proxy
@@ -92,7 +92,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Inference Engine | 0/3 | Planned | - |
+| 1. Inference Engine | 3/3 | ✓ Complete | 2026-02-14 |
 | 2. Security & Access | 0/2 | Not started | - |
 | 3. OpenNebula Integration | 0/2 | Not started | - |
 | 4. Build & Distribution | 0/3 | Not started | - |
