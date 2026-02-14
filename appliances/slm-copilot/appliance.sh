@@ -88,7 +88,9 @@ log_copilot() {
 #  LIFECYCLE: service_install  (Packer build-time, runs once)
 # ==========================================================================
 service_install() {
-    msg info "Installing SLM-Copilot appliance components"
+    init_copilot_log
+    log_copilot info "=== service_install started ==="
+    log_copilot info "Installing SLM-Copilot appliance components"
 
     # 1. Install runtime dependencies
     export DEBIAN_FRONTEND=noninteractive
@@ -115,17 +117,17 @@ service_install() {
              "${LOCALAI_CONFIG_DIR}"
 
     # 4. Download LocalAI binary
-    msg info "Downloading LocalAI v${LOCALAI_VERSION} binary"
+    log_copilot info "Downloading LocalAI v${LOCALAI_VERSION} binary"
     curl -fSL -o "${LOCALAI_BIN}" \
         "https://github.com/mudler/LocalAI/releases/download/v${LOCALAI_VERSION}/local-ai-Linux-x86_64"
     chmod +x "${LOCALAI_BIN}"
 
     # 5. Pre-install llama-cpp backend (INFER-09)
-    msg info "Pre-installing llama-cpp backend"
+    log_copilot info "Pre-installing llama-cpp backend"
     "${LOCALAI_BIN}" backends install llama-cpp
 
     # 6. Download GGUF model (INFER-03)
-    msg info "Downloading Devstral Small 2 Q4_K_M model (~14.3 GB)"
+    log_copilot info "Downloading Devstral Small 2 Q4_K_M model (~14.3 GB)"
     curl -fSL -C - -o "${LOCALAI_MODELS_DIR}/${LOCALAI_GGUF_FILE}" \
         "${LOCALAI_GGUF_URL}"
 
@@ -133,10 +135,10 @@ service_install() {
     local _file_size
     _file_size=$(stat -c%s "${LOCALAI_MODELS_DIR}/${LOCALAI_GGUF_FILE}")
     if [ "${_file_size}" -lt 14000000000 ]; then
-        msg error "GGUF file is only ${_file_size} bytes -- expected ~14.3 GB. Download may be corrupted."
+        log_copilot error "GGUF file is only ${_file_size} bytes -- expected ~14.3 GB. Download may be corrupted."
         exit 1
     fi
-    msg info "GGUF model downloaded ($((_file_size / 1073741824)) GB)"
+    log_copilot info "GGUF model downloaded ($((_file_size / 1073741824)) GB)"
 
     # 7. Build-time pre-warming (INFER-09 verification)
     # Generate a minimal model YAML for pre-warming
@@ -152,7 +154,7 @@ mmlock: false
 use_jinja: true
 YAML
 
-    msg info "Pre-warming: starting LocalAI for build-time verification"
+    log_copilot info "Pre-warming: starting LocalAI for build-time verification"
     "${LOCALAI_BIN}" run \
         --address 127.0.0.1:8080 \
         --models-path "${LOCALAI_MODELS_DIR}" \
@@ -165,13 +167,13 @@ YAML
         sleep 5
         _elapsed=$((_elapsed + 5))
         if [ "${_elapsed}" -ge 300 ]; then
-            msg error "Pre-warm: LocalAI not ready after 300s"
+            log_copilot error "Pre-warm: LocalAI not ready after 300s"
             kill "${_prewarm_pid}" 2>/dev/null || true
             wait "${_prewarm_pid}" 2>/dev/null || true
             exit 1
         fi
     done
-    msg info "Pre-warm: LocalAI ready (${_elapsed}s)"
+    log_copilot info "Pre-warm: LocalAI ready (${_elapsed}s)"
 
     # Run smoke test to verify inference works (INFER-01, INFER-02, INFER-05)
     smoke_test "http://127.0.0.1:8080" || {
@@ -183,7 +185,7 @@ YAML
     # Clean shutdown
     kill "${_prewarm_pid}"
     wait "${_prewarm_pid}" 2>/dev/null || true
-    msg info "Pre-warm: LocalAI shut down"
+    log_copilot info "Pre-warm: LocalAI shut down"
 
     # Remove pre-warm model YAML (service_configure generates the real one)
     rm -f "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml"
@@ -191,14 +193,16 @@ YAML
     # 8. Set ownership
     chown -R "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_BASE_DIR}"
 
-    msg info "SLM-Copilot appliance install complete (LocalAI v${LOCALAI_VERSION})"
+    log_copilot info "SLM-Copilot appliance install complete (LocalAI v${LOCALAI_VERSION})"
 }
 
 # ==========================================================================
 #  LIFECYCLE: service_configure  (runs at each VM boot)
 # ==========================================================================
 service_configure() {
-    msg info "Configuring SLM-Copilot"
+    init_copilot_log
+    log_copilot info "=== service_configure started ==="
+    log_copilot info "Configuring SLM-Copilot"
 
     # 1. Validate context variables (fail-fast on invalid values)
     validate_config
@@ -208,7 +212,7 @@ service_configure() {
 
     # 3. Check for AVX2 support (warn only, don't fail)
     if ! grep -q avx2 /proc/cpuinfo; then
-        msg warning "CPU does not support AVX2 -- LocalAI inference may fail (SIGILL) or be very slow"
+        log_copilot warning "CPU does not support AVX2 -- LocalAI inference may fail (SIGILL) or be very slow"
     fi
 
     # 4. Generate model YAML (INFER-01, INFER-06, INFER-07)
@@ -230,14 +234,16 @@ service_configure() {
     generate_htpasswd
     generate_nginx_config
 
-    msg info "SLM-Copilot configuration complete"
+    log_copilot info "SLM-Copilot configuration complete"
 }
 
 # ==========================================================================
 #  LIFECYCLE: service_bootstrap  (runs after configure, starts services)
 # ==========================================================================
 service_bootstrap() {
-    msg info "Bootstrapping SLM-Copilot"
+    init_copilot_log
+    log_copilot info "=== service_bootstrap started ==="
+    log_copilot info "Bootstrapping SLM-Copilot"
 
     # 1. Enable and start LocalAI
     systemctl enable local-ai.service
@@ -253,7 +259,7 @@ service_bootstrap() {
     # Phase 2: Attempt Let's Encrypt if domain is configured (SEC-06, SEC-07)
     attempt_letsencrypt
 
-    msg info "SLM-Copilot bootstrap complete -- LocalAI on 127.0.0.1:8080, Nginx on 0.0.0.0:443"
+    log_copilot info "SLM-Copilot bootstrap complete -- LocalAI on 127.0.0.1:8080, Nginx on 0.0.0.0:443"
 }
 
 # ==========================================================================
@@ -343,7 +349,7 @@ mmlock: false
 use_jinja: true
 YAML
     chown "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml"
-    msg info "Model YAML written to ${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS})"
+    log_copilot info "Model YAML written to ${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS})"
 }
 
 # ==========================================================================
@@ -357,7 +363,7 @@ LOCALAI_CONTEXT_SIZE=${ONEAPP_COPILOT_CONTEXT_SIZE}
 LOCALAI_LOG_LEVEL=info
 EOF
     chmod 0640 "${LOCALAI_ENV_FILE}"
-    msg info "Environment file written to ${LOCALAI_ENV_FILE}"
+    log_copilot info "Environment file written to ${LOCALAI_ENV_FILE}"
 }
 
 # ==========================================================================
@@ -388,7 +394,7 @@ OOMScoreAdjust=-500
 [Install]
 WantedBy=multi-user.target
 EOF
-    msg info "Systemd unit written to ${LOCALAI_SYSTEMD_UNIT}"
+    log_copilot info "Systemd unit written to ${LOCALAI_SYSTEMD_UNIT}"
 }
 
 # ==========================================================================
@@ -397,16 +403,16 @@ EOF
 wait_for_localai() {
     local _timeout=300
     local _elapsed=0
-    msg info "Waiting for LocalAI readiness (timeout: ${_timeout}s)"
+    log_copilot info "Waiting for LocalAI readiness (timeout: ${_timeout}s)"
     while ! curl -sf http://127.0.0.1:8080/readyz >/dev/null 2>&1; do
         sleep 5
         _elapsed=$((_elapsed + 5))
         if [ "${_elapsed}" -ge "${_timeout}" ]; then
-            msg error "LocalAI not ready after ${_timeout}s -- check: journalctl -u local-ai"
+            log_copilot error "LocalAI not ready after ${_timeout}s -- check: journalctl -u local-ai"
             exit 1
         fi
     done
-    msg info "LocalAI ready (${_elapsed}s)"
+    log_copilot info "LocalAI ready (${_elapsed}s)"
 }
 
 # ==========================================================================
@@ -417,18 +423,18 @@ validate_config() {
 
     # ONEAPP_COPILOT_CONTEXT_SIZE: must be a positive integer, reasonable range 512-131072
     if ! [[ "${ONEAPP_COPILOT_CONTEXT_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
-        msg error "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- must be a positive integer"
+        log_copilot error "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- must be a positive integer"
         _errors=$((_errors + 1))
     elif [ "${ONEAPP_COPILOT_CONTEXT_SIZE}" -lt 512 ]; then
-        msg error "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- minimum 512 tokens"
+        log_copilot error "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- minimum 512 tokens"
         _errors=$((_errors + 1))
     elif [ "${ONEAPP_COPILOT_CONTEXT_SIZE}" -gt 131072 ]; then
-        msg warning "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- very large context, may cause OOM on 32 GB VM"
+        log_copilot warning "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- very large context, may cause OOM on 32 GB VM"
     fi
 
     # ONEAPP_COPILOT_THREADS: must be a non-negative integer (0 = auto-detect)
     if ! [[ "${ONEAPP_COPILOT_THREADS}" =~ ^[0-9]+$ ]]; then
-        msg error "ONEAPP_COPILOT_THREADS='${ONEAPP_COPILOT_THREADS}' -- must be a non-negative integer (0=auto)"
+        log_copilot error "ONEAPP_COPILOT_THREADS='${ONEAPP_COPILOT_THREADS}' -- must be a non-negative integer (0=auto)"
         _errors=$((_errors + 1))
     fi
 
@@ -436,18 +442,18 @@ validate_config() {
     if [ -n "${ONEAPP_COPILOT_DOMAIN}" ]; then
         if [[ "${ONEAPP_COPILOT_DOMAIN}" =~ [[:space:]] ]] || \
            [[ ! "${ONEAPP_COPILOT_DOMAIN}" =~ \. ]]; then
-            msg error "ONEAPP_COPILOT_DOMAIN='${ONEAPP_COPILOT_DOMAIN}' -- must be a valid FQDN (e.g., copilot.example.com)"
+            log_copilot error "ONEAPP_COPILOT_DOMAIN='${ONEAPP_COPILOT_DOMAIN}' -- must be a valid FQDN (e.g., copilot.example.com)"
             _errors=$((_errors + 1))
         fi
     fi
 
     # Abort on validation errors
     if [ "${_errors}" -gt 0 ]; then
-        msg error "Configuration validation failed with ${_errors} error(s) -- aborting"
+        log_copilot error "Configuration validation failed with ${_errors} error(s) -- aborting"
         exit 1
     fi
 
-    msg info "Configuration validation passed (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS}, domain=${ONEAPP_COPILOT_DOMAIN:-none})"
+    log_copilot info "Configuration validation passed (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS}, domain=${ONEAPP_COPILOT_DOMAIN:-none})"
 }
 
 # ==========================================================================
@@ -456,40 +462,40 @@ validate_config() {
 smoke_test() {
     local _endpoint="${1:-http://127.0.0.1:8080}"
 
-    msg info "Running smoke test against ${_endpoint}"
+    log_copilot info "Running smoke test against ${_endpoint}"
 
     # Test 1: Non-streaming chat completion (INFER-01)
     local _response
     _response=$(curl -sf "${_endpoint}/v1/chat/completions" \
         -H 'Content-Type: application/json' \
         -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Write a Python hello world\"}],\"max_tokens\":50}") || {
-        msg error "Smoke test: chat completion request failed"
+        log_copilot error "Smoke test: chat completion request failed"
         return 1
     }
     echo "${_response}" | jq -e '.choices[0].message.content' >/dev/null 2>&1 || {
-        msg error "Smoke test: no content in chat completion response"
+        log_copilot error "Smoke test: no content in chat completion response"
         return 1
     }
-    msg info "Smoke test: chat completion OK"
+    log_copilot info "Smoke test: chat completion OK"
 
     # Test 2: Streaming chat completion (INFER-02)
     curl -sf "${_endpoint}/v1/chat/completions" \
         -H 'Content-Type: application/json' \
         -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":10,\"stream\":true}" \
         | grep -q 'data:' || {
-        msg error "Smoke test: streaming response has no SSE data lines"
+        log_copilot error "Smoke test: streaming response has no SSE data lines"
         return 1
     }
-    msg info "Smoke test: streaming OK"
+    log_copilot info "Smoke test: streaming OK"
 
     # Test 3: Health endpoint (INFER-05)
     curl -sf "${_endpoint}/readyz" >/dev/null 2>&1 || {
-        msg error "Smoke test: /readyz did not return 200"
+        log_copilot error "Smoke test: /readyz did not return 200"
         return 1
     }
-    msg info "Smoke test: health check OK"
+    log_copilot info "Smoke test: health check OK"
 
-    msg info "All smoke tests passed"
+    log_copilot info "All smoke tests passed"
     return 0
 }
 
@@ -516,7 +522,7 @@ generate_selfsigned_cert() {
     ln -sf "${NGINX_CERT_DIR}/selfsigned-cert.pem" "${NGINX_CERT_DIR}/cert.pem"
     ln -sf "${NGINX_CERT_DIR}/selfsigned-key.pem" "${NGINX_CERT_DIR}/key.pem"
 
-    msg info "Self-signed certificate generated for ${_vm_ip}"
+    log_copilot info "Self-signed certificate generated for ${_vm_ip}"
 }
 
 # ==========================================================================
@@ -527,7 +533,7 @@ generate_htpasswd() {
 
     if [ -z "${_password}" ]; then
         _password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-        msg info "Auto-generated API password (no ONEAPP_COPILOT_PASSWORD set)"
+        log_copilot info "Auto-generated API password (no ONEAPP_COPILOT_PASSWORD set)"
     fi
 
     htpasswd -cbB "${NGINX_HTPASSWD}" copilot "${_password}"
@@ -538,7 +544,7 @@ generate_htpasswd() {
     echo "${_password}" > /var/lib/slm-copilot/password
     chmod 0600 /var/lib/slm-copilot/password
 
-    msg info "htpasswd written to ${NGINX_HTPASSWD} (user: copilot)"
+    log_copilot info "htpasswd written to ${NGINX_HTPASSWD} (user: copilot)"
 }
 
 # ==========================================================================
@@ -638,11 +644,11 @@ NGINX_EOF
 
     # Validate config before proceeding
     if ! nginx -t 2>&1; then
-        msg error "Nginx configuration validation failed -- check ${NGINX_CONF}"
+        log_copilot error "Nginx configuration validation failed -- check ${NGINX_CONF}"
         exit 1
     fi
 
-    msg info "Nginx config written to ${NGINX_CONF}"
+    log_copilot info "Nginx config written to ${NGINX_CONF}"
 }
 
 # ==========================================================================
@@ -652,11 +658,11 @@ attempt_letsencrypt() {
     local _domain="${ONEAPP_COPILOT_DOMAIN:-}"
 
     if [ -z "${_domain}" ]; then
-        msg info "ONEAPP_COPILOT_DOMAIN not set -- using self-signed certificate"
+        log_copilot info "ONEAPP_COPILOT_DOMAIN not set -- using self-signed certificate"
         return 0
     fi
 
-    msg info "Attempting Let's Encrypt certificate for ${_domain}"
+    log_copilot info "Attempting Let's Encrypt certificate for ${_domain}"
 
     # Ensure webroot directory structure exists
     mkdir -p /var/www/acme-challenge/.well-known/acme-challenge
@@ -673,7 +679,7 @@ attempt_letsencrypt() {
         ln -sf "/etc/letsencrypt/live/${_domain}/fullchain.pem" "${NGINX_CERT_DIR}/cert.pem"
         ln -sf "/etc/letsencrypt/live/${_domain}/privkey.pem" "${NGINX_CERT_DIR}/key.pem"
         nginx -s reload
-        msg info "Let's Encrypt certificate installed for ${_domain}"
+        log_copilot info "Let's Encrypt certificate installed for ${_domain}"
 
         # Set up renewal deploy hook (nginx reload on cert renewal)
         mkdir -p /etc/letsencrypt/renewal-hooks/deploy
@@ -683,7 +689,7 @@ nginx -s reload
 HOOK
         chmod +x /etc/letsencrypt/renewal-hooks/deploy/nginx-reload.sh
     else
-        msg warning "Let's Encrypt failed for ${_domain} -- keeping self-signed certificate"
-        msg warning "Ensure: DNS resolves ${_domain} to this VM, port 80 is reachable from internet"
+        log_copilot warning "Let's Encrypt failed for ${_domain} -- keeping self-signed certificate"
+        log_copilot warning "Ensure: DNS resolves ${_domain} to this VM, port 80 is reachable from internet"
     fi
 }
