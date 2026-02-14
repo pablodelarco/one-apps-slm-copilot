@@ -13,7 +13,7 @@ This roadmap delivers a production-ready OpenNebula marketplace appliance for so
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Inference Engine** - LocalAI serves Devstral Small 2 on CPU with streaming, health checks, and systemd management ✓ (2026-02-14)
-- [ ] **Phase 2: Security & Access** - Nginx reverse proxy with TLS, authentication, CORS, and SSE streaming support
+- [x] **Phase 2: Security & Access** - Nginx reverse proxy with TLS, authentication, CORS, and SSE streaming support ✓ (2026-02-14)
 - [ ] **Phase 3: OpenNebula Integration** - Context variable-driven configuration, report file, idempotent lifecycle, and logging
 - [ ] **Phase 4: Build & Distribution** - Packer image build, test suite, marketplace metadata, and documentation
 
@@ -49,8 +49,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 02-01: Nginx installation, self-signed TLS, and reverse proxy with SSE streaming
-- [ ] 02-02: Basic auth, CORS headers, Let's Encrypt automation, and HTTP redirect
+- [x] 02-01: Nginx installation, self-signed TLS, and reverse proxy with SSE streaming
+- [x] 02-02: Basic auth, CORS headers, Let's Encrypt automation, and HTTP redirect
 
 ### Phase 3: OpenNebula Integration
 **Goal**: The appliance is fully configurable via OpenNebula context variables, self-documenting via the report file, and survives reboot cycles without configuration drift
@@ -93,6 +93,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Inference Engine | 3/3 | ✓ Complete | 2026-02-14 |
-| 2. Security & Access | 0/2 | Not started | - |
+| 2. Security & Access | 2/2 | ✓ Complete | 2026-02-14 |
 | 3. OpenNebula Integration | 0/2 | Not started | - |
 | 4. Build & Distribution | 0/3 | Not started | - |
