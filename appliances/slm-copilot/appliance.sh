@@ -406,13 +406,22 @@ validate_config() {
         _errors=$((_errors + 1))
     fi
 
+    # ONEAPP_COPILOT_DOMAIN: if set, must look like a valid FQDN (contains dot, no spaces)
+    if [ -n "${ONEAPP_COPILOT_DOMAIN}" ]; then
+        if [[ "${ONEAPP_COPILOT_DOMAIN}" =~ [[:space:]] ]] || \
+           [[ ! "${ONEAPP_COPILOT_DOMAIN}" =~ \. ]]; then
+            msg error "ONEAPP_COPILOT_DOMAIN='${ONEAPP_COPILOT_DOMAIN}' -- must be a valid FQDN (e.g., copilot.example.com)"
+            _errors=$((_errors + 1))
+        fi
+    fi
+
     # Abort on validation errors
     if [ "${_errors}" -gt 0 ]; then
         msg error "Configuration validation failed with ${_errors} error(s) -- aborting"
         exit 1
     fi
 
-    msg info "Configuration validation passed (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS})"
+    msg info "Configuration validation passed (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS}, domain=${ONEAPP_COPILOT_DOMAIN:-none})"
 }
 
 # ==========================================================================
