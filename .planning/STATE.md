@@ -5,32 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNebula marketplace
-**Current focus:** Phase 2 - Security & Access (Phase 1 complete)
+**Current focus:** Phase 2 - Security & Access (plan 01 complete, plan 02 next)
 
 ## Current Position
 
-Phase: 1 of 4 (Inference Engine) -- COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-14 — Completed 01-03 (validation, smoke tests + production polish)
+Phase: 2 of 4 (Security & Access)
+Plan: 1 of 2 in current phase
+Status: Plan 02-01 complete, ready for 02-02
+Last activity: 2026-02-14 — Completed 02-01 (Nginx reverse proxy with TLS, auth, CORS, SSE)
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 2 min
-- Total execution time: 0.10 hours
+- Total execution time: 0.15 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-inference-engine | 3/3 | 6 min | 2 min |
+| 02-security-access | 1/2 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (2 min)
+- Last 5 plans: 01-01 (2 min), 01-02 (2 min), 01-03 (2 min), 02-01 (3 min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -55,6 +56,13 @@ Recent decisions affecting current work:
 - [01-03]: smoke_test returns 1 (not exit 1) so callers handle cleanup before exiting
 - [01-03]: SC2034 disabled globally for ONE_SERVICE_* framework variables
 - [01-03]: Context size 131072 gets warning not error (may work on large VMs)
+- [02-01]: RSA 2048-bit self-signed certs (ephemeral, regenerated every boot)
+- [02-01]: Symlink indirection for cert paths enables Let's Encrypt swap without config changes
+- [02-01]: Single-quoted heredoc (<<'NGINX_EOF') prevents bash expansion of nginx variables
+- [02-01]: ssl_buffer_size 4k for SSE streaming latency; proxy_read_timeout 600s for CPU inference
+- [02-01]: gzip off in location block prevents gzip from buffering SSE output
+- [02-01]: CORS wildcard origin acceptable (basic auth password IS the access control)
+- [02-01]: ONEAPP_COPILOT_DOMAIN validation only when non-empty (empty = skip Let's Encrypt)
 
 ### Pending Todos
 
@@ -68,5 +76,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Phase 1 complete and verified (20/20 must-haves). Ready for Phase 2.
+Stopped at: Completed 02-01-PLAN.md (Nginx reverse proxy). Ready for 02-02 (Let's Encrypt).
 Resume file: None
