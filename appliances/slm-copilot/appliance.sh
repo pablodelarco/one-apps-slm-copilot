@@ -60,6 +60,29 @@ readonly LOCALAI_GID=49999
 readonly NGINX_CONF="/etc/nginx/sites-available/slm-copilot.conf"
 readonly NGINX_CERT_DIR="/etc/ssl/slm-copilot"
 readonly NGINX_HTPASSWD="/etc/nginx/.htpasswd"
+readonly COPILOT_LOG="/var/log/one-appliance/slm-copilot.log"
+
+# ==========================================================================
+#  LOGGING: dedicated application log helpers
+# ==========================================================================
+
+# Ensure log directory and file exist with correct permissions
+init_copilot_log() {
+    mkdir -p /var/log/one-appliance
+    touch "${COPILOT_LOG}"
+    chmod 0640 "${COPILOT_LOG}"
+}
+
+# Log to both the one-apps framework (via msg) and the dedicated log file
+log_copilot() {
+    local _level="$1"
+    shift
+    local _message="$*"
+    local _timestamp
+    _timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    echo "${_timestamp} [${_level^^}] ${_message}" >> "${COPILOT_LOG}"
+    msg "${_level}" "${_message}"
+}
 
 # ==========================================================================
 #  LIFECYCLE: service_install  (Packer build-time, runs once)
