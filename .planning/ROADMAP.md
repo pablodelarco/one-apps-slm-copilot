@@ -78,12 +78,12 @@ Plans:
   3. All bash scripts in the repository pass `shellcheck` with zero warnings (`make lint` exits 0)
   4. The README documents architecture, quick start, all ONEAPP_* variables, Cline connection setup (with screenshots or JSON snippets), troubleshooting steps, and performance expectations
   5. Community marketplace YAML metadata is complete and follows the marketplace-community repository format, ready for PR submission
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 04-01: Packer HCL definition, build wrapper script, and Makefile
-- [ ] 04-02: Post-deployment test script and shellcheck compliance
-- [ ] 04-03: Marketplace YAML metadata, README documentation, and manual build guide
+- [ ] 04-01-PLAN.md — Packer HCL definition, cloud-init, provisioner scripts, build wrapper script, and Makefile
+- [ ] 04-02-PLAN.md — Post-deployment test script and shellcheck compliance
+- [ ] 04-03-PLAN.md — README documentation, manual build guide, and marketplace YAML finalization
 
 ## Progress
 
