@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNebula marketplace
-**Current focus:** Phase 3 - OpenNebula Integration (Plan 01 complete, Plan 02 next)
+**Current focus:** Phase 3 complete. Ready for Phase 4 - Build Pipeline.
 
 ## Current Position
 
-Phase: 3 of 4 (OpenNebula Integration)
-Plan: 1 of 2 in current phase
-Status: Plan 03-01 complete, ready for Plan 03-02
-Last activity: 2026-02-14 — Completed 03-01 (dedicated application logging)
+Phase: 3 of 4 (OpenNebula Integration) -- COMPLETE
+Plan: 2 of 2 in current phase (all plans complete)
+Status: Phase 03 complete, ready for Phase 04
+Last activity: 2026-02-14 — Completed 03-02 (report file, SSH banner, marketplace metadata)
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 2.5 min
-- Total execution time: 0.25 hours
+- Total plans completed: 7
+- Average duration: 2.4 min
+- Total execution time: 0.28 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [███████░░░] 70%
 |-------|-------|-------|----------|
 | 01-inference-engine | 3/3 | 6 min | 2 min |
 | 02-security-access | 2/2 | 5 min | 2.5 min |
-| 03-opennebula-integration | 1/2 | 4 min | 4 min |
+| 03-opennebula-integration | 2/2 | 6 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (2 min), 01-03 (2 min), 02-01 (3 min), 02-02 (2 min), 03-01 (4 min)
+- Last 5 plans: 01-03 (2 min), 02-01 (3 min), 02-02 (2 min), 03-01 (4 min), 03-02 (2 min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -71,6 +71,10 @@ Recent decisions affecting current work:
 - [03-01]: log_copilot wrapper over msg (not exec/tee redirect) to avoid interfering with one-apps pipe mechanism
 - [03-01]: init_copilot_log called in all three lifecycle entry points for robustness across stage boundaries
 - [03-01]: Uppercase log level via ${_level^^} for consistent log file format
+- [03-02]: Password always read from /var/lib/slm-copilot/password file, never from ONEAPP_COPILOT_PASSWORD context variable
+- [03-02]: Report written in service_bootstrap after services running (not service_configure) for live status
+- [03-02]: SSH banner via profile.d inline heredoc (framework owns /etc/motd)
+- [03-02]: Defensive ONE_SERVICE_REPORT fallback: ${ONE_SERVICE_REPORT:-/etc/one-appliance/config}
 
 ### Pending Todos
 
@@ -83,5 +87,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 03-01-PLAN.md (dedicated logging). Ready for 03-02 (report file, SSH banner, marketplace metadata).
+Stopped at: Completed 03-02-PLAN.md (report file, SSH banner, marketplace metadata). Phase 03 complete. Ready for Phase 04 (build pipeline).
 Resume file: None
