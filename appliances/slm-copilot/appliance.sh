@@ -85,6 +85,90 @@ log_copilot() {
 }
 
 # ==========================================================================
+#  REPORT: write_report_file  (INI-style report at ONE_SERVICE_REPORT)
+# ==========================================================================
+
+# Writes the service report file with connection info, credentials, model
+# details, live service status, Cline configuration, and a curl test command.
+# Called at the END of service_bootstrap (after services confirmed running).
+write_report_file() {
+    local _vm_ip
+    _vm_ip=$(hostname -I | awk '{print $1}')
+
+    # ALWAYS read password from persisted file -- never from $ONEAPP_COPILOT_PASSWORD
+    # which may be empty for auto-generated passwords (Pitfall 3)
+    local _password
+    _password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'unknown')
+
+    # Determine TLS mode
+    local _tls_mode="self-signed"
+    if [ -n "${ONEAPP_COPILOT_DOMAIN:-}" ] && \
+       [ -f "/etc/letsencrypt/live/${ONEAPP_COPILOT_DOMAIN}/fullchain.pem" ]; then
+        _tls_mode="letsencrypt (${ONEAPP_COPILOT_DOMAIN})"
+    fi
+
+    # Determine endpoint URL (domain if set, IP otherwise)
+    local _endpoint="https://${_vm_ip}"
+    if [ -n "${ONEAPP_COPILOT_DOMAIN:-}" ]; then
+        _endpoint="https://${ONEAPP_COPILOT_DOMAIN}"
+    fi
+
+    # Query live service status
+    local _localai_status
+    _localai_status=$(systemctl is-active local-ai 2>/dev/null || echo unknown)
+    local _nginx_status
+    _nginx_status=$(systemctl is-active nginx 2>/dev/null || echo unknown)
+
+    # Write INI-style report to framework-defined path (defensive fallback)
+    local _report="${ONE_SERVICE_REPORT:-/etc/one-appliance/config}"
+    mkdir -p "$(dirname "${_report}")"
+
+    cat > "${_report}" <<EOF
+[Connection info]
+endpoint     = ${_endpoint}
+api_username = copilot
+api_password = ${_password}
+
+[Model]
+name         = devstral-small-2
+backend      = llama-cpp
+quantization = Q4_K_M (24B parameters)
+context_size = ${ONEAPP_COPILOT_CONTEXT_SIZE}
+threads      = ${ONEAPP_COPILOT_THREADS}
+
+[Service status]
+local-ai     = ${_localai_status}
+nginx        = ${_nginx_status}
+tls          = ${_tls_mode}
+
+[Cline VS Code setup]
+1. Install Cline extension in VS Code
+2. Click settings gear icon in Cline panel
+3. Select "OpenAI Compatible" as API Provider
+4. Enter these values:
+   Base URL  : ${_endpoint}/v1
+   API Key   : ${_password}
+   Model ID  : devstral-small-2
+
+[Cline JSON snippet]
+{
+  "apiProvider": "openai-compatible",
+  "openAiBaseUrl": "${_endpoint}/v1",
+  "openAiApiKey": "${_password}",
+  "openAiModelId": "devstral-small-2"
+}
+
+[Test with curl]
+curl -k -u copilot:${_password} ${_endpoint}/v1/chat/completions \\
+  -H 'Content-Type: application/json' \\
+  -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Hello"}]}'
+EOF
+
+    chmod 600 "${_report}"
+    log_copilot info "Report file written to ${_report}"
+}
+
+# ==========================================================================
 #  LIFECYCLE: service_install  (Packer build-time, runs once)
 # ==========================================================================
 service_install() {
@@ -190,7 +274,31 @@ YAML
     # Remove pre-warm model YAML (service_configure generates the real one)
     rm -f "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml"
 
-    # 8. Set ownership
+    # 8. Install SSH login banner (ONE-08)
+    cat > /etc/profile.d/slm-copilot-banner.sh <<'BANNER_EOF'
+#!/bin/bash
+[[ $- == *i* ]] || return
+_vm_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+_password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'see report')
+_localai=$(systemctl is-active local-ai 2>/dev/null || echo 'unknown')
+_nginx=$(systemctl is-active nginx 2>/dev/null || echo 'unknown')
+printf '\n'
+printf '  SLM-Copilot -- Sovereign AI Coding Assistant\n'
+printf '  =============================================\n'
+printf '  Endpoint : https://%s\n' "${_vm_ip}"
+printf '  Username : copilot\n'
+printf '  Password : %s\n' "${_password}"
+printf '  Model    : devstral-small-2 (24B Q4_K_M)\n'
+printf '  LocalAI  : %s\n' "${_localai}"
+printf '  Nginx    : %s\n' "${_nginx}"
+printf '\n'
+printf '  Report   : cat /etc/one-appliance/config\n'
+printf '  Logs     : tail -f /var/log/one-appliance/slm-copilot.log\n'
+printf '\n'
+BANNER_EOF
+    chmod 0644 /etc/profile.d/slm-copilot-banner.sh
+
+    # 9. Set ownership
     chown -R "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_BASE_DIR}"
 
     log_copilot info "SLM-Copilot appliance install complete (LocalAI v${LOCALAI_VERSION})"
@@ -259,6 +367,9 @@ service_bootstrap() {
     # Phase 2: Attempt Let's Encrypt if domain is configured (SEC-06, SEC-07)
     attempt_letsencrypt
 
+    # Phase 3: Write report file with connection info, credentials, Cline config (ONE-02, ONE-05)
+    write_report_file
+
     log_copilot info "SLM-Copilot bootstrap complete -- LocalAI on 127.0.0.1:8080, Nginx on 0.0.0.0:443"
 }
 
@@ -315,6 +426,10 @@ Configuration files:
   /etc/nginx/.htpasswd                         Basic auth password file
   /etc/ssl/slm-copilot/cert.pem               TLS certificate (symlink)
   /etc/ssl/slm-copilot/key.pem                TLS private key (symlink)
+
+Report and logs:
+  /etc/one-appliance/config                    Service report (credentials, Cline config)
+  /var/log/one-appliance/slm-copilot.log       Application log (all stages)
 
 Health check:
   curl -k https://localhost/readyz
