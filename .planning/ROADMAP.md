@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Inference Engine** - LocalAI serves Devstral Small 2 on CPU with streaming, health checks, and systemd management ✓ (2026-02-14)
 - [x] **Phase 2: Security & Access** - Nginx reverse proxy with TLS, authentication, CORS, and SSE streaming support ✓ (2026-02-14)
-- [ ] **Phase 3: OpenNebula Integration** - Context variable-driven configuration, report file, idempotent lifecycle, and logging
+- [x] **Phase 3: OpenNebula Integration** - Context variable-driven configuration, report file, idempotent lifecycle, and logging ✓ (2026-02-14)
 - [ ] **Phase 4: Build & Distribution** - Packer image build, test suite, marketplace metadata, and documentation
 
 ## Phase Details
@@ -65,8 +65,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Dedicated logging (log_copilot wrapper, COPILOT_LOG), replace all msg calls
-- [ ] 03-02-PLAN.md — Report file, Cline snippet, SSH banner, and marketplace metadata YAML
+- [x] 03-01-PLAN.md — Dedicated logging (log_copilot wrapper, COPILOT_LOG), replace all msg calls
+- [x] 03-02-PLAN.md — Report file, Cline snippet, SSH banner, and marketplace metadata YAML
 
 ### Phase 4: Build & Distribution
 **Goal**: A new user can build the QCOW2 image from source, deploy it to any OpenNebula cloud, validate it works, and submit it to the community marketplace
@@ -94,5 +94,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Inference Engine | 3/3 | ✓ Complete | 2026-02-14 |
 | 2. Security & Access | 2/2 | ✓ Complete | 2026-02-14 |
-| 3. OpenNebula Integration | 0/2 | Not started | - |
+| 3. OpenNebula Integration | 2/2 | ✓ Complete | 2026-02-14 |
 | 4. Build & Distribution | 0/3 | Not started | - |
