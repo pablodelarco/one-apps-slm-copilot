@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNebula marketplace
-**Current focus:** Phase 3 complete. Ready for Phase 4 - Build Pipeline.
+**Current focus:** Phase 4 complete. All 4 phases done -- project ready for build and marketplace submission.
 
 ## Current Position
 
-Phase: 3 of 4 (OpenNebula Integration) -- COMPLETE
-Plan: 2 of 2 in current phase (all plans complete)
-Status: Phase 03 complete, ready for Phase 04
-Last activity: 2026-02-14 — Completed 03-02 (report file, SSH banner, marketplace metadata)
+Phase: 4 of 4 (Build & Distribution) -- COMPLETE
+Plan: 3 of 3 in current phase (all plans complete)
+Status: All phases complete. Ready for build and marketplace submission.
+Last activity: 2026-02-14 -- Completed 04-03 (README documentation, marketplace YAML finalization)
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 10
 - Average duration: 2.4 min
-- Total execution time: 0.28 hours
+- Total execution time: 0.40 hours
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [████████░░] 80%
 | 01-inference-engine | 3/3 | 6 min | 2 min |
 | 02-security-access | 2/2 | 5 min | 2.5 min |
 | 03-opennebula-integration | 2/2 | 6 min | 3 min |
+| 04-build-distribution | 3/3 | 7 min | 2.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (2 min), 02-01 (3 min), 02-02 (2 min), 03-01 (4 min), 03-02 (2 min)
+- Last 5 plans: 02-02 (2 min), 03-01 (4 min), 03-02 (2 min), 04-01 (4 min), 04-02 (4 min), 04-03 (2 min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -75,10 +76,18 @@ Recent decisions affecting current work:
 - [03-02]: Report written in service_bootstrap after services running (not service_configure) for live status
 - [03-02]: SSH banner via profile.d inline heredoc (framework owns /etc/motd)
 - [03-02]: Defensive ONE_SERVICE_REPORT fallback: ${ONE_SERVICE_REPORT:-/etc/one-appliance/config}
+- [04-01]: Packer VM resources: 4 vCPU / 16 GB RAM / 50 GB disk (model download + pre-warm needs)
+- [04-01]: SSH timeout 30m to accommodate 14 GB model download during service_install
+- [04-01]: build.sh auto-clones one-apps if not present (simplest for new users)
+- [04-02]: curl -sk for all test requests (self-signed cert compatibility)
+- [04-02]: 120s timeout for chat completion tests (CPU inference is slow)
+- [04-03]: README structured as 14-section developer onboarding document
+- [04-03]: Manual build guide documents 12 steps replicating Packer 8-step sequence
+- [04-03]: Marketplace YAML keeps PLACEHOLDER values with instruction comments for post-build replacement
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
@@ -87,5 +96,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 03-02-PLAN.md (report file, SSH banner, marketplace metadata). Phase 03 complete. Ready for Phase 04 (build pipeline).
+Stopped at: Completed 04-03-PLAN.md (README documentation, marketplace YAML finalization). Phase 04 complete. All 10 plans across 4 phases executed. Project ready for build and marketplace submission.
 Resume file: None
