@@ -7,6 +7,8 @@
 # OpenNebula marketplace appliance. CPU-only inference, no GPU required.
 # --------------------------------------------------------------------------
 
+# shellcheck disable=SC2034  # ONE_SERVICE_* vars used by one-apps framework
+
 ONE_SERVICE_NAME='Service SLM-Copilot - Sovereign AI Coding Assistant'
 ONE_SERVICE_VERSION='1.0.0'
 ONE_SERVICE_BUILD=$(date +%s)
