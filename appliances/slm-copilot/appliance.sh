@@ -201,6 +201,12 @@ service_configure() {
     # 7. Reload systemd
     systemctl daemon-reload
 
+    # Phase 2: Nginx reverse proxy with TLS and auth
+    # Order matters: certs and htpasswd MUST exist before nginx config is written
+    generate_selfsigned_cert
+    generate_htpasswd
+    generate_nginx_config
+
     msg info "SLM-Copilot configuration complete"
 }
 
@@ -217,7 +223,11 @@ service_bootstrap() {
     # 2. Wait for readiness (INFER-05)
     wait_for_localai
 
-    msg info "SLM-Copilot bootstrap complete -- LocalAI serving on 127.0.0.1:8080"
+    # Phase 2: Start Nginx reverse proxy
+    systemctl enable nginx
+    systemctl restart nginx
+
+    msg info "SLM-Copilot bootstrap complete -- LocalAI on 127.0.0.1:8080, Nginx on 0.0.0.0:443"
 }
 
 # ==========================================================================
@@ -240,34 +250,51 @@ SLM-Copilot Appliance
 
 Sovereign AI coding assistant powered by LocalAI serving Devstral Small 2
 24B (Q4_K_M quantization) on CPU. OpenAI-compatible API for Cline/VS Code.
+Nginx reverse proxy with TLS, basic auth, CORS, and SSE streaming.
 
 Configuration variables (set via OpenNebula context):
   ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
                                 Valid range: 512-131072 tokens
   ONEAPP_COPILOT_THREADS        CPU threads for inference (default: 0 = auto-detect)
                                 Set to number of physical cores for best performance
+  ONEAPP_COPILOT_PASSWORD       API password (auto-generated 16-char if empty)
+                                Username is always 'copilot'
+  ONEAPP_COPILOT_DOMAIN         FQDN for Let's Encrypt certificate (optional)
+                                If empty, self-signed certificate is used
 
 Ports:
+  80    HTTP redirect to HTTPS (+ ACME challenge for Let's Encrypt)
+  443   HTTPS API (TLS + basic auth)
   8080  LocalAI API (127.0.0.1 only -- not exposed to the network)
 
 Service management:
-  systemctl status local-ai          Check service status
+  systemctl status local-ai          Check inference server status
   systemctl restart local-ai         Restart the inference server
-  systemctl stop local-ai            Stop the inference server
-  journalctl -u local-ai -f          Follow live logs
+  systemctl status nginx             Check reverse proxy status
+  systemctl restart nginx            Restart the reverse proxy
+  journalctl -u local-ai -f          Follow inference server logs
+  journalctl -u nginx -f             Follow reverse proxy logs
 
 Configuration files:
   /opt/local-ai/models/devstral-small-2.yaml   Model configuration
   /opt/local-ai/config/local-ai.env            Environment variables
   /etc/systemd/system/local-ai.service         Systemd unit
+  /etc/nginx/sites-available/slm-copilot.conf  Nginx reverse proxy config
+  /etc/nginx/.htpasswd                         Basic auth password file
+  /etc/ssl/slm-copilot/cert.pem               TLS certificate (symlink)
+  /etc/ssl/slm-copilot/key.pem                TLS private key (symlink)
 
 Health check:
-  curl http://127.0.0.1:8080/readyz
+  curl -k https://localhost/readyz
+  curl -k https://localhost/health
 
 Test inference:
-  curl http://127.0.0.1:8080/v1/chat/completions \
+  curl -k -u copilot:PASSWORD https://localhost/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Hello"}]}'
+
+Password retrieval:
+  cat /var/lib/slm-copilot/password
 HELP
 }
 
