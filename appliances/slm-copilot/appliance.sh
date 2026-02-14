@@ -130,18 +130,12 @@ YAML
     done
     msg info "Pre-warm: LocalAI ready (${_elapsed}s)"
 
-    # Test inference
-    local _response
-    _response=$(curl -sf http://127.0.0.1:8080/v1/chat/completions \
-        -H 'Content-Type: application/json' \
-        -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":5}")
-    echo "${_response}" | jq -e '.choices[0].message.content' >/dev/null 2>&1 || {
-        msg error "Pre-warm smoke test failed: no content in response"
+    # Run smoke test to verify inference works (INFER-01, INFER-02, INFER-05)
+    smoke_test "http://127.0.0.1:8080" || {
         kill "${_prewarm_pid}" 2>/dev/null || true
         wait "${_prewarm_pid}" 2>/dev/null || true
         exit 1
     }
-    msg info "Pre-warm smoke test passed"
 
     # Clean shutdown
     kill "${_prewarm_pid}"
@@ -163,25 +157,28 @@ YAML
 service_configure() {
     msg info "Configuring SLM-Copilot"
 
-    # 1. Ensure directory structure exists (idempotent)
+    # 1. Validate context variables (fail-fast on invalid values)
+    validate_config
+
+    # 2. Ensure directory structure exists (idempotent)
     mkdir -p "${LOCALAI_MODELS_DIR}" "${LOCALAI_CONFIG_DIR}"
 
-    # 2. Check for AVX2 support (warn only, don't fail)
+    # 3. Check for AVX2 support (warn only, don't fail)
     if ! grep -q avx2 /proc/cpuinfo; then
         msg warning "CPU does not support AVX2 -- LocalAI inference may fail (SIGILL) or be very slow"
     fi
 
-    # 3. Generate model YAML (INFER-01, INFER-06, INFER-07)
+    # 4. Generate model YAML (INFER-01, INFER-06, INFER-07)
     #    CRITICAL: use_jinja must be true for Devstral chat template
     generate_model_yaml
 
-    # 4. Generate environment file
+    # 5. Generate environment file
     generate_env_file
 
-    # 5. Generate systemd unit file (INFER-04, INFER-08)
+    # 6. Generate systemd unit file (INFER-04, INFER-08)
     generate_systemd_unit
 
-    # 6. Reload systemd
+    # 7. Reload systemd
     systemctl daemon-reload
 
     msg info "SLM-Copilot configuration complete"
@@ -221,25 +218,36 @@ service_help() {
 SLM-Copilot Appliance
 =====================
 
-This appliance runs a sovereign AI coding assistant powered by LocalAI
-serving Devstral Small 2 24B (Q4_K_M quantization) on CPU.
+Sovereign AI coding assistant powered by LocalAI serving Devstral Small 2
+24B (Q4_K_M quantization) on CPU. OpenAI-compatible API for Cline/VS Code.
 
-Key configuration variables (set via OpenNebula context):
+Configuration variables (set via OpenNebula context):
   ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
-  ONEAPP_COPILOT_THREADS        CPU threads for inference, 0=auto (default: 0)
+                                Valid range: 512-131072 tokens
+  ONEAPP_COPILOT_THREADS        CPU threads for inference (default: 0 = auto-detect)
+                                Set to number of physical cores for best performance
 
 Ports:
-  8080  LocalAI API (localhost only, proxied by Nginx)
+  8080  LocalAI API (127.0.0.1 only -- not exposed to the network)
 
 Service management:
-  systemctl status  local-ai
-  systemctl restart local-ai
-  journalctl -u local-ai -f
+  systemctl status local-ai          Check service status
+  systemctl restart local-ai         Restart the inference server
+  systemctl stop local-ai            Stop the inference server
+  journalctl -u local-ai -f          Follow live logs
 
 Configuration files:
-  /opt/local-ai/config/local-ai.env     Environment variables
-  /opt/local-ai/models/                 Model YAML + GGUF weights
-  /etc/systemd/system/local-ai.service  Systemd unit
+  /opt/local-ai/models/devstral-small-2.yaml   Model configuration
+  /opt/local-ai/config/local-ai.env            Environment variables
+  /etc/systemd/system/local-ai.service         Systemd unit
+
+Health check:
+  curl http://127.0.0.1:8080/readyz
+
+Test inference:
+  curl http://127.0.0.1:8080/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Hello"}]}'
 HELP
 }
 
@@ -326,4 +334,79 @@ wait_for_localai() {
         fi
     done
     msg info "LocalAI ready (${_elapsed}s)"
+}
+
+# ==========================================================================
+#  HELPER: validate_config  (fail-fast on invalid context variable values)
+# ==========================================================================
+validate_config() {
+    local _errors=0
+
+    # ONEAPP_COPILOT_CONTEXT_SIZE: must be a positive integer, reasonable range 512-131072
+    if ! [[ "${ONEAPP_COPILOT_CONTEXT_SIZE}" =~ ^[1-9][0-9]*$ ]]; then
+        msg error "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- must be a positive integer"
+        _errors=$((_errors + 1))
+    elif [ "${ONEAPP_COPILOT_CONTEXT_SIZE}" -lt 512 ]; then
+        msg error "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- minimum 512 tokens"
+        _errors=$((_errors + 1))
+    elif [ "${ONEAPP_COPILOT_CONTEXT_SIZE}" -gt 131072 ]; then
+        msg warning "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- very large context, may cause OOM on 32 GB VM"
+    fi
+
+    # ONEAPP_COPILOT_THREADS: must be a non-negative integer (0 = auto-detect)
+    if ! [[ "${ONEAPP_COPILOT_THREADS}" =~ ^[0-9]+$ ]]; then
+        msg error "ONEAPP_COPILOT_THREADS='${ONEAPP_COPILOT_THREADS}' -- must be a non-negative integer (0=auto)"
+        _errors=$((_errors + 1))
+    fi
+
+    # Abort on validation errors
+    if [ "${_errors}" -gt 0 ]; then
+        msg error "Configuration validation failed with ${_errors} error(s) -- aborting"
+        exit 1
+    fi
+
+    msg info "Configuration validation passed (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS})"
+}
+
+# ==========================================================================
+#  HELPER: smoke_test  (verify chat completions, streaming, and health)
+# ==========================================================================
+smoke_test() {
+    local _endpoint="${1:-http://127.0.0.1:8080}"
+
+    msg info "Running smoke test against ${_endpoint}"
+
+    # Test 1: Non-streaming chat completion (INFER-01)
+    local _response
+    _response=$(curl -sf "${_endpoint}/v1/chat/completions" \
+        -H 'Content-Type: application/json' \
+        -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Write a Python hello world\"}],\"max_tokens\":50}") || {
+        msg error "Smoke test: chat completion request failed"
+        return 1
+    }
+    echo "${_response}" | jq -e '.choices[0].message.content' >/dev/null 2>&1 || {
+        msg error "Smoke test: no content in chat completion response"
+        return 1
+    }
+    msg info "Smoke test: chat completion OK"
+
+    # Test 2: Streaming chat completion (INFER-02)
+    curl -sf "${_endpoint}/v1/chat/completions" \
+        -H 'Content-Type: application/json' \
+        -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":10,\"stream\":true}" \
+        | grep -q 'data:' || {
+        msg error "Smoke test: streaming response has no SSE data lines"
+        return 1
+    }
+    msg info "Smoke test: streaming OK"
+
+    # Test 3: Health endpoint (INFER-05)
+    curl -sf "${_endpoint}/readyz" >/dev/null 2>&1 || {
+        msg error "Smoke test: /readyz did not return 200"
+        return 1
+    }
+    msg info "Smoke test: health check OK"
+
+    msg info "All smoke tests passed"
+    return 0
 }
