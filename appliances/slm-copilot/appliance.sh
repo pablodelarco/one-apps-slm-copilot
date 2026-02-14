@@ -162,7 +162,29 @@ YAML
 # ==========================================================================
 service_configure() {
     msg info "Configuring SLM-Copilot"
-    # Implemented in plan 01-03
+
+    # 1. Ensure directory structure exists (idempotent)
+    mkdir -p "${LOCALAI_MODELS_DIR}" "${LOCALAI_CONFIG_DIR}"
+
+    # 2. Check for AVX2 support (warn only, don't fail)
+    if ! grep -q avx2 /proc/cpuinfo; then
+        msg warning "CPU does not support AVX2 -- LocalAI inference may fail (SIGILL) or be very slow"
+    fi
+
+    # 3. Generate model YAML (INFER-01, INFER-06, INFER-07)
+    #    CRITICAL: use_jinja must be true for Devstral chat template
+    generate_model_yaml
+
+    # 4. Generate environment file
+    generate_env_file
+
+    # 5. Generate systemd unit file (INFER-04, INFER-08)
+    generate_systemd_unit
+
+    # 6. Reload systemd
+    systemctl daemon-reload
+
+    msg info "SLM-Copilot configuration complete"
 }
 
 # ==========================================================================
@@ -170,7 +192,15 @@ service_configure() {
 # ==========================================================================
 service_bootstrap() {
     msg info "Bootstrapping SLM-Copilot"
-    # Implemented in plan 01-02
+
+    # 1. Enable and start LocalAI
+    systemctl enable local-ai.service
+    systemctl start local-ai.service
+
+    # 2. Wait for readiness (INFER-05)
+    wait_for_localai
+
+    msg info "SLM-Copilot bootstrap complete -- LocalAI serving on 127.0.0.1:8080"
 }
 
 # ==========================================================================
@@ -211,4 +241,89 @@ Configuration files:
   /opt/local-ai/models/                 Model YAML + GGUF weights
   /etc/systemd/system/local-ai.service  Systemd unit
 HELP
+}
+
+# ==========================================================================
+#  HELPER: generate_model_yaml  (write model configuration)
+# ==========================================================================
+generate_model_yaml() {
+    cat > "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml" <<YAML
+# Devstral Small 2 24B (Q4_K_M) -- generated at $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+name: ${LOCALAI_MODEL_NAME}
+backend: llama-cpp
+parameters:
+  model: ${LOCALAI_GGUF_FILE}
+  temperature: 0.15
+  top_p: 0.95
+context_size: ${ONEAPP_COPILOT_CONTEXT_SIZE}
+threads: ${ONEAPP_COPILOT_THREADS}
+mmap: true
+mmlock: false
+use_jinja: true
+YAML
+    chown "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml"
+    msg info "Model YAML written to ${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS})"
+}
+
+# ==========================================================================
+#  HELPER: generate_env_file  (write environment configuration)
+# ==========================================================================
+generate_env_file() {
+    cat > "${LOCALAI_ENV_FILE}" <<EOF
+# LocalAI environment -- generated at $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+LOCALAI_THREADS=${ONEAPP_COPILOT_THREADS}
+LOCALAI_CONTEXT_SIZE=${ONEAPP_COPILOT_CONTEXT_SIZE}
+LOCALAI_LOG_LEVEL=info
+EOF
+    chmod 0640 "${LOCALAI_ENV_FILE}"
+    msg info "Environment file written to ${LOCALAI_ENV_FILE}"
+}
+
+# ==========================================================================
+#  HELPER: generate_systemd_unit  (write systemd service file)
+# ==========================================================================
+generate_systemd_unit() {
+    cat > "${LOCALAI_SYSTEMD_UNIT}" <<EOF
+[Unit]
+Description=LocalAI LLM Inference Server (SLM-Copilot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=localai
+Group=localai
+EnvironmentFile=${LOCALAI_ENV_FILE}
+ExecStart=${LOCALAI_BIN} run \\
+    --address 127.0.0.1:8080 \\
+    --models-path ${LOCALAI_MODELS_DIR} \\
+    --disable-webui
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+LimitNOFILE=65536
+OOMScoreAdjust=-500
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    msg info "Systemd unit written to ${LOCALAI_SYSTEMD_UNIT}"
+}
+
+# ==========================================================================
+#  HELPER: wait_for_localai  (poll /readyz, 300s timeout)
+# ==========================================================================
+wait_for_localai() {
+    local _timeout=300
+    local _elapsed=0
+    msg info "Waiting for LocalAI readiness (timeout: ${_timeout}s)"
+    while ! curl -sf http://127.0.0.1:8080/readyz >/dev/null 2>&1; do
+        sleep 5
+        _elapsed=$((_elapsed + 5))
+        if [ "${_elapsed}" -ge "${_timeout}" ]; then
+            msg error "LocalAI not ready after ${_timeout}s -- check: journalctl -u local-ai"
+            exit 1
+        fi
+    done
+    msg info "LocalAI ready (${_elapsed}s)"
 }
