@@ -1,6 +1,7 @@
 ---
 :app:
   :name: SLM-Copilot
+  :type: image
   :version: 1.0.0
   :publisher: OpenNebula Systems
   :description: Sovereign AI coding assistant (Devstral Small 2 24B on CPU)
@@ -12,19 +13,24 @@
     - copilot
     - sovereign
 
+:os:
+  :type: linux
+  :base: Ubuntu 24.04 LTS
+
 :context:
-  :variables:
-    ONEAPP_COPILOT_PASSWORD:
+  :prefixed: ONEAPP_COPILOT
+  :params:
+    PASSWORD:
       :type: password
       :description: API password for basic auth (auto-generated if empty)
-    ONEAPP_COPILOT_DOMAIN:
+    DOMAIN:
       :type: text
       :description: FQDN for Let's Encrypt certificate (self-signed if empty)
-    ONEAPP_COPILOT_CONTEXT_SIZE:
+    CONTEXT_SIZE:
       :type: text
       :default: '32768'
       :description: Token context window size (512-131072)
-    ONEAPP_COPILOT_THREADS:
+    THREADS:
       :type: text
       :default: '0'
       :description: CPU threads for inference (0 = auto-detect)
@@ -37,7 +43,8 @@
     :disk: 51200
 
 :infra:
+  :disk_format: qcow2
+  :apps_path: appliances/slm-copilot
   :os: Ubuntu 24.04 LTS
   :arch: x86_64
   :hypervisor: KVM
-  :format: qcow2
