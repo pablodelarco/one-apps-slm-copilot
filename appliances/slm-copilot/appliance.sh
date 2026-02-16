@@ -656,7 +656,7 @@ generate_htpasswd() {
     fi
 
     htpasswd -cbB "${NGINX_HTPASSWD}" copilot "${_password}"
-    chmod 0640 "${NGINX_HTPASSWD}"
+    chmod 0644 "${NGINX_HTPASSWD}"
 
     # Persist password for report file (Phase 3)
     mkdir -p /var/lib/slm-copilot
