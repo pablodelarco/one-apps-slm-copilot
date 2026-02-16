@@ -13,7 +13,7 @@ version: 1.0.0
 publisher: OpenNebula Systems
 description: |-
   One-click sovereign AI coding assistant powered by
-  [Devstral Small 2](https://mistral.ai/products/devstral) (24B, Mistral AI)
+  [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B, Mistral AI)
   running on CPU via [LocalAI](https://localai.io/). Not all AI needs GPU --
   this 24B parameter model delivers practical coding assistance on any 32 GB
   VM with 16+ vCPUs. Import, instantiate, code.

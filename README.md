@@ -4,7 +4,7 @@ One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNeb
 
 ## Overview
 
-SLM-Copilot is an OpenNebula marketplace appliance that deploys a fully sovereign AI coding assistant on any standard VM -- no GPU required. It packages [Devstral Small 2](https://mistral.ai/products/devstral) (24B parameters, Q4\_K\_M quantization) served by [LocalAI](https://localai.io/) behind an Nginx reverse proxy with TLS encryption and basic authentication.
+SLM-Copilot is an OpenNebula marketplace appliance that deploys a fully sovereign AI coding assistant on any standard VM -- no GPU required. It packages [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B parameters, Q4\_K\_M quantization) served by [LocalAI](https://localai.io/) behind an Nginx reverse proxy with TLS encryption and basic authentication.
 
 The key value proposition is sovereignty and simplicity: your code stays in your jurisdiction, your data never leaves your infrastructure, and you get a working AI coding copilot in minutes without any cloud API subscriptions or GPU hardware. Import the appliance from the OpenNebula marketplace, instantiate a VM with 32 GB RAM and 16 vCPUs, and connect from VS Code with the [Cline](https://cline.bot) extension.
 
@@ -109,7 +109,7 @@ If using the default self-signed certificate (no `ONEAPP_COPILOT_DOMAIN` set), t
 
 ### Prerequisites
 
-- [Packer](https://www.packer.io/) v1.15+
+- [Packer](https://developer.hashicorp.com/packer) v1.15+
 - QEMU/KVM with `/dev/kvm` accessible
 - `cloud-localds` (from the `cloud-image-utils` package)
 - `qemu-img` (from the `qemu-utils` package)
