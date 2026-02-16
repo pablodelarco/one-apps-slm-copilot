@@ -245,7 +245,7 @@ YAML
         --address 127.0.0.1:8080 \
         --models-path "${LOCALAI_MODELS_DIR}" \
         --backends-path "${LOCALAI_BACKENDS_DIR}" \
-        --disable-webui &
+        --disable-web-ui &
     local _prewarm_pid=$!
 
     # Wait for readiness (model loading can take 60-180s on CPU)
@@ -503,7 +503,7 @@ ExecStart=${LOCALAI_BIN} run \\
     --address 127.0.0.1:8080 \\
     --models-path ${LOCALAI_MODELS_DIR} \\
     --backends-path ${LOCALAI_BACKENDS_DIR} \\
-    --disable-webui
+    --disable-web-ui
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=300
