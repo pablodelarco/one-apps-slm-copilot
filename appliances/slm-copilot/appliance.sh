@@ -50,6 +50,7 @@ readonly LOCALAI_BASE_DIR="/opt/local-ai"
 readonly LOCALAI_BIN="${LOCALAI_BASE_DIR}/bin/local-ai"
 readonly LOCALAI_MODELS_DIR="${LOCALAI_BASE_DIR}/models"
 readonly LOCALAI_CONFIG_DIR="${LOCALAI_BASE_DIR}/config"
+readonly LOCALAI_BACKENDS_DIR="${LOCALAI_BASE_DIR}/backends"
 readonly LOCALAI_ENV_FILE="${LOCALAI_CONFIG_DIR}/local-ai.env"
 readonly LOCALAI_SYSTEMD_UNIT="/etc/systemd/system/local-ai.service"
 readonly LOCALAI_MODEL_NAME="devstral-small-2"
@@ -198,7 +199,8 @@ service_install() {
     # 3. Create directory structure
     mkdir -p "${LOCALAI_BASE_DIR}/bin" \
              "${LOCALAI_MODELS_DIR}" \
-             "${LOCALAI_CONFIG_DIR}"
+             "${LOCALAI_CONFIG_DIR}" \
+             "${LOCALAI_BACKENDS_DIR}"
 
     # 4. Download LocalAI binary
     log_copilot info "Downloading LocalAI v${LOCALAI_VERSION} binary"
@@ -208,7 +210,7 @@ service_install() {
 
     # 5. Pre-install llama-cpp backend (INFER-09)
     log_copilot info "Pre-installing llama-cpp backend"
-    "${LOCALAI_BIN}" backends install llama-cpp
+    "${LOCALAI_BIN}" backends install --backends-path "${LOCALAI_BACKENDS_DIR}" llama-cpp
 
     # 6. Download GGUF model (INFER-03)
     log_copilot info "Downloading Devstral Small 2 Q4_K_M model (~14.3 GB)"
@@ -242,6 +244,7 @@ YAML
     "${LOCALAI_BIN}" run \
         --address 127.0.0.1:8080 \
         --models-path "${LOCALAI_MODELS_DIR}" \
+        --backends-path "${LOCALAI_BACKENDS_DIR}" \
         --disable-webui &
     local _prewarm_pid=$!
 
@@ -499,6 +502,7 @@ EnvironmentFile=${LOCALAI_ENV_FILE}
 ExecStart=${LOCALAI_BIN} run \\
     --address 127.0.0.1:8080 \\
     --models-path ${LOCALAI_MODELS_DIR} \\
+    --backends-path ${LOCALAI_BACKENDS_DIR} \\
     --disable-webui
 Restart=on-failure
 RestartSec=10
