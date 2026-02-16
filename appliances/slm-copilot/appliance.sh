@@ -203,7 +203,7 @@ service_install() {
     # 4. Download LocalAI binary
     log_copilot info "Downloading LocalAI v${LOCALAI_VERSION} binary"
     curl -fSL -o "${LOCALAI_BIN}" \
-        "https://github.com/mudler/LocalAI/releases/download/v${LOCALAI_VERSION}/local-ai-Linux-x86_64"
+        "https://github.com/mudler/LocalAI/releases/download/v${LOCALAI_VERSION}/local-ai-v${LOCALAI_VERSION}-linux-amd64"
     chmod +x "${LOCALAI_BIN}"
 
     # 5. Pre-install llama-cpp backend (INFER-09)
