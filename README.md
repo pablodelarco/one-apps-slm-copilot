@@ -8,7 +8,7 @@ One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNeb
 - **CPU-only inference** — works on any standard VM with enough RAM, no GPU needed
 - **Pre-loaded model** — Devstral Small 2 (24B, Q4_K_M) by Mistral AI, optimized for code
 - **Secure by default** — TLS encryption + token-based authentication out of the box
-- **OpenAI-compatible API** — works with Cline, Continue, aider, and any OpenAI-compatible client
+- **OpenAI-compatible API** — works with aider, Cline, Continue, and any OpenAI-compatible client
 - **100% open-source** — Apache 2.0 model (Mistral AI), MIT inference engine (Ollama), Apache 2.0 platform (OpenNebula)
 
 ## Installation
@@ -35,14 +35,22 @@ Set these context variables in the VM template before booting (all optional):
 
 All variables are re-read on every boot — change a value and reboot to apply.
 
-## Connecting from VS Code (Cline)
+## Connecting with aider
 
-1. Install the [Cline](https://cline.bot) extension in VS Code
-2. Open the Cline panel → settings gear → select **OpenAI Compatible**
-3. Enter the details from your VM's config file:
-   - **Base URL:** `https://<vm-ip>/v1`
-   - **API Key:** `<password>`
-   - **Model ID:** `devstral-small-2`
+[aider](https://aider.chat) is an open-source AI coding assistant that runs in the terminal.
+
+1. Install aider: `pip install aider-chat`
+2. Configure it to point at your appliance:
+   ```
+   aider --openai-api-key <password> \
+         --openai-api-base https://<vm-ip>/v1 \
+         --model openai/devstral-small-2 \
+         --no-show-model-warnings
+   ```
+
+Replace `<vm-ip>` and `<password>` with the values from `cat /etc/one-appliance/config` on the VM.
+
+Any OpenAI-compatible client (Cline, Continue, etc.) can also connect using the same base URL, API key, and model ID.
 
 ## Troubleshooting
 
