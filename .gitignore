@@ -1,0 +1,18 @@
+# Build artifacts
+build/images/
+build/one-apps/
+build/export/
+*.iso
+
+# Internal workflow
+.planning/
+tasks/
+CLAUDE.md
+.claude/
+
+# Editor cruft
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

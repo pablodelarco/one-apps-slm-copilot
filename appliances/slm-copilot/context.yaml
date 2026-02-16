@@ -1,0 +1,9 @@
+---
+:tests:
+  :image_name: slm-copilot
+  :type: single
+  :microenvs:
+    - name: default
+      context:
+        ONEAPP_COPILOT_CONTEXT_SIZE: '32768'
+        ONEAPP_COPILOT_THREADS: '0'

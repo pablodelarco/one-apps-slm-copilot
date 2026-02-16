@@ -1,12 +1,3 @@
-packer {
-  required_plugins {
-    qemu = {
-      source  = "github.com/hashicorp/qemu"
-      version = ">= 1.1.0"
-    }
-  }
-}
-
 # Build 1: Generate cloud-init seed ISO
 source "null" "context" {
   communicator = "none"

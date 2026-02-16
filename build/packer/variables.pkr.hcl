@@ -27,3 +27,8 @@ variable "one_apps_dir" {
   type        = string
   description = "Path to one-apps repository checkout"
 }
+
+variable "distro" {
+  type    = string
+  default = ""
+}
