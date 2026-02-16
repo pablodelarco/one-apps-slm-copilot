@@ -9,7 +9,7 @@ One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNeb
 - **Pre-loaded model** — Devstral Small 2 (24B, Q4_K_M) by Mistral AI, optimized for code
 - **Secure by default** — TLS encryption + token-based authentication out of the box
 - **OpenAI-compatible API** — works with Cline, Continue, aider, and any OpenAI-compatible client
-- **100% open-source** — Apache 2.0 model (Mistral AI), MIT inference engine (LocalAI), Apache 2.0 platform (OpenNebula)
+- **100% open-source** — Apache 2.0 model (Mistral AI), MIT inference engine (Ollama), Apache 2.0 platform (OpenNebula)
 
 ## Installation
 
@@ -53,7 +53,7 @@ All variables are re-read on every boot — change a value and reboot to apply.
 | Let's Encrypt failed | Check DNS and that port 80 is reachable |
 | Client can't connect | Verify port 443 is open; test with `curl -k https://<vm-ip>/readyz` |
 
-Logs: `journalctl -u local-ai` (inference) · `journalctl -u nginx` (proxy) · `/etc/one-appliance/config` (credentials)
+Logs: `journalctl -u ollama` (inference) · `journalctl -u nginx` (proxy) · `/etc/one-appliance/config` (credentials)
 
 ## License
 
