@@ -42,7 +42,7 @@ else
 fi
 
 # Test 2: Health endpoint (no auth required)
-if curl -sk --max-time 10 "${ENDPOINT}/readyz" | grep -qi 'ok\|ready'; then
+if curl -sk --max-time 10 "${ENDPOINT}/readyz" | grep -qi 'ok\|ready\|running'; then
     report PASS "Health endpoint (/readyz)"
 else
     report FAIL "Health endpoint (/readyz)"

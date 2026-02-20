@@ -4,11 +4,11 @@ One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNeb
 
 ## Overview
 
-SLM-Copilot is an OpenNebula marketplace appliance that deploys a fully sovereign AI coding assistant on any standard VM -- no GPU required. It packages [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B parameters, Q4\_K\_M quantization) served by [LocalAI](https://localai.io/) behind an Nginx reverse proxy with TLS encryption and basic authentication.
+SLM-Copilot is an OpenNebula marketplace appliance that deploys a fully sovereign AI coding assistant on any standard VM -- no GPU required. It packages [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B parameters, Q4\_K\_M quantization) served by [Ollama](https://ollama.com/) behind an Nginx reverse proxy with TLS encryption and basic authentication.
 
 The key value proposition is sovereignty and simplicity: your code stays in your jurisdiction, your data never leaves your infrastructure, and you get a working AI coding copilot in minutes without any cloud API subscriptions or GPU hardware. Import the appliance from the OpenNebula marketplace, instantiate a VM with 32 GB RAM and 16 vCPUs, and connect from VS Code with the [Cline](https://cline.bot) extension.
 
-The entire stack is 100% open-source, built by European companies: Apache 2.0 for the Devstral model (Mistral AI, Paris), MIT for LocalAI inference engine, BSD for Nginx reverse proxy, and Apache 2.0 for OpenNebula (Madrid) cloud platform and the one-apps appliance framework.
+The entire stack is 100% open-source, built by European companies: Apache 2.0 for the Devstral model (Mistral AI, Paris), MIT for Ollama inference engine, BSD for Nginx reverse proxy, and Apache 2.0 for OpenNebula (Madrid) cloud platform and the one-apps appliance framework.
 
 ## Architecture
 
@@ -18,20 +18,20 @@ Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
 | VS Code + Cline  |  HTTPS  | Nginx (TLS + Basic Auth + CORS)  :443   |
 |  OpenAI Provider |-------->|   |                                      |
 +------------------+         |   v                                      |
-                             | LocalAI (llama-cpp backend)     :8080    |
+                             | Ollama (llama.cpp backend)      :11434   |
                              |   |                                      |
                              |   v                                      |
                              | Devstral Small 2 (24B Q4_K_M, ~14 GB)   |
                              +------------------------------------------+
 ```
 
-**Data flow:** Cline sends OpenAI-compatible API requests over HTTPS to port 443. Nginx terminates TLS (self-signed or Let's Encrypt), validates basic auth credentials, adds CORS headers, and proxies requests to LocalAI on localhost:8080. LocalAI loads the Devstral Small 2 GGUF model via the llama-cpp backend and returns chat completions (streaming or non-streaming). All inference runs on CPU using the VM's available cores.
+**Data flow:** Cline sends OpenAI-compatible API requests over HTTPS to port 443. Nginx terminates TLS (self-signed or Let's Encrypt), validates basic auth credentials, adds CORS headers, and proxies requests to Ollama on localhost:11434. Ollama loads the Devstral Small 2 model via its built-in llama.cpp engine and returns chat completions (streaming or non-streaming). All inference runs on CPU using the VM's available cores.
 
 **Components:**
 
 - **Nginx** -- Reverse proxy handling TLS termination, HTTP basic authentication, CORS headers for browser-based clients, and SSE streaming passthrough. Listens on ports 80 (HTTPS redirect + ACME challenge) and 443 (API).
-- **LocalAI** -- OpenAI-compatible inference server running the llama-cpp backend. Binds to 127.0.0.1:8080 (not exposed externally). Managed by systemd with OOM protection.
-- **Devstral Small 2** -- 24B parameter coding model by Mistral AI, quantized to Q4\_K\_M (~14 GB). Optimized for code analysis, refactoring, test generation, and bug fixes. Requires Jinja2 chat template support (enabled via `use_jinja: true`).
+- **Ollama** -- OpenAI-compatible inference server with built-in llama.cpp engine and AVX-512 optimization. Binds to 127.0.0.1:11434 (not exposed externally). Managed by systemd with environment overrides via drop-in config.
+- **Devstral Small 2** -- 24B parameter coding model by Mistral AI, quantized to Q4\_K\_M (~14 GB). Optimized for code analysis, refactoring, test generation, and bug fixes.
 
 ## Quick Start
 
@@ -114,7 +114,7 @@ If using the default self-signed certificate (no `ONEAPP_COPILOT_DOMAIN` set), t
 - `cloud-localds` (from the `cloud-image-utils` package)
 - `qemu-img` (from the `qemu-utils` package)
 - ~50 GB free disk space
-- Internet access (downloads Ubuntu cloud image, one-apps framework, LocalAI binary, and the 14 GB model)
+- Internet access (downloads Ubuntu cloud image, one-apps framework, Ollama, and the model from Ollama registry)
 
 ### Build
 
@@ -132,18 +132,18 @@ The build wrapper (`build.sh`) orchestrates the following:
 2. Downloads the Ubuntu 24.04 cloud image if not already present
 3. Clones the [one-apps](https://github.com/OpenNebula/one-apps) framework if not already present
 4. Runs `packer init` and `packer build` (two-build pattern: cloud-init ISO generation + QEMU provisioning)
-5. The Packer QEMU build provisions the image with an 8-step sequence: SSH hardening, one-context install, one-apps framework, appliance script, context hooks, `service install` (downloads LocalAI + model + pre-warms), and cleanup
+5. The Packer QEMU build provisions the image with an 8-step sequence: SSH hardening, one-context install, one-apps framework, appliance script, context hooks, `service install` (installs Ollama + pulls model + pre-warms), and cleanup
 6. Compresses the output QCOW2 with `qemu-img convert -c`
 7. Generates SHA256 and MD5 checksums
 
 ### Build output
 
-- Image: `build/export/slm-copilot-1.0.0.qcow2` (~15-18 GB compressed)
-- Checksums: `build/export/slm-copilot-1.0.0.qcow2.sha256` and `.md5`
+- Image: `build/export/slm-copilot-1.1.0.qcow2` (~15-18 GB compressed)
+- Checksums: `build/export/slm-copilot-1.1.0.qcow2.sha256` and `.md5`
 
 ### Build time
 
-20-40 minutes depending on network speed (14 GB model download) and CPU speed (model pre-warm inference test).
+20-40 minutes depending on network speed (model download from Ollama registry) and CPU speed (model pre-warm inference test).
 
 ### Makefile targets
 
@@ -248,7 +248,7 @@ chmod 0755 /etc/one-context.d/net.d/net-99-report-ready
 
 **10. Run service install**
 
-This is the longest step -- it downloads LocalAI (~50 MB), the llama-cpp backend (~200 MB), and the Devstral model (~14 GB), then pre-warms the model with a test inference.
+This is the longest step -- it installs Ollama, pulls the Devstral model from the Ollama registry, and pre-warms the model with a test inference.
 
 ```bash
 /etc/one-appliance/service install
@@ -280,12 +280,12 @@ poweroff
 From the host, export and compress the disk image:
 
 ```bash
-qemu-img convert -c -O qcow2 /path/to/vm-disk.qcow2 slm-copilot-1.0.0.qcow2
-sha256sum slm-copilot-1.0.0.qcow2 > slm-copilot-1.0.0.qcow2.sha256
-md5sum slm-copilot-1.0.0.qcow2 > slm-copilot-1.0.0.qcow2.md5
+qemu-img convert -c -O qcow2 /path/to/vm-disk.qcow2 slm-copilot-1.1.0.qcow2
+sha256sum slm-copilot-1.1.0.qcow2 > slm-copilot-1.1.0.qcow2.sha256
+md5sum slm-copilot-1.1.0.qcow2 > slm-copilot-1.1.0.qcow2.md5
 ```
 
-The resulting `slm-copilot-1.0.0.qcow2` can be imported into OpenNebula as a marketplace image.
+The resulting `slm-copilot-1.1.0.qcow2` can be imported into OpenNebula as a marketplace image.
 
 ## Testing
 
@@ -332,8 +332,8 @@ All requests use `curl -sk` (self-signed certificate compatibility). Chat comple
 ### Service not starting after boot
 
 ```bash
-systemctl status local-ai
-journalctl -u local-ai -f
+systemctl status ollama
+journalctl -u ollama -f
 ```
 
 Check that the VM has at least 32 GB RAM. The model requires ~14 GB just for loading, plus KV cache overhead.
@@ -362,7 +362,7 @@ The 24B Q4\_K\_M model needs approximately 14 GB of RAM. The KV cache scales wit
 - 32K context (default): ~14 GB model + ~2 GB KV cache = ~16 GB total (safe)
 - 128K context: ~14 GB model + ~8 GB KV cache = ~22 GB total (tight)
 
-Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates LocalAI.
+Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates Ollama.
 
 ### Cline cannot connect
 
@@ -377,7 +377,7 @@ Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates LocalAI.
 | Log | Location |
 |-----|----------|
 | Application log | `/var/log/one-appliance/slm-copilot.log` |
-| LocalAI service | `journalctl -u local-ai` |
+| Ollama service | `journalctl -u ollama` |
 | Nginx access/error | `journalctl -u nginx` |
 | Report file | `/etc/one-appliance/config` |
 
@@ -395,6 +395,7 @@ Expected inference performance with Devstral Small 2 (24B Q4\_K\_M):
 
 - Speeds are approximate and depend on CPU architecture, memory bandwidth, and prompt complexity
 - AVX-512 support significantly improves inference speed (20-40% over AVX2-only CPUs)
+- Ollama ships with AVX-512 optimized binaries, providing ~2x speedup over generic builds
 - Context size affects memory usage -- larger context windows require more RAM for the KV cache
 - First request after boot is slower due to model loading and initial memory allocation
 - The model is pre-warmed during image build, so cold-start on deployment is just memory mapping (~30-60 seconds)
@@ -425,7 +426,7 @@ The SLM-Copilot appliance is licensed under the Apache License 2.0.
 | Component | License | Maintainer |
 |-----------|---------|------------|
 | Devstral Small 2 | Apache 2.0 | Mistral AI (Paris) |
-| LocalAI | MIT | Ettore Di Giacinto |
+| Ollama | MIT | Ollama Inc. |
 | Nginx | BSD-2-Clause | Nginx Inc. |
 | OpenNebula one-apps | Apache 2.0 | OpenNebula Systems (Madrid) |
 

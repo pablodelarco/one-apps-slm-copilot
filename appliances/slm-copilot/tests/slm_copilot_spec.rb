@@ -6,8 +6,8 @@ RSpec.describe 'SLM-Copilot Appliance' do
     @app.wait_until_ready(timeout: 600)
   end
 
-  it 'has LocalAI service running' do
-    expect(@app.execute('systemctl is-active local-ai').strip).to eq('active')
+  it 'has Ollama service running' do
+    expect(@app.execute('systemctl is-active ollama').strip).to eq('active')
   end
 
   it 'has Nginx service running' do

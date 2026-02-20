@@ -4,6 +4,23 @@ All notable changes to the SLM-Copilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-02-20
+
+### Changed
+
+- Replaced LocalAI with Ollama as inference backend (2x speed improvement: 3.9 -> 7.5 tok/s)
+- Ollama ships AVX-512 optimized llama.cpp, eliminating manual backend compilation
+- Systemd management via drop-in override instead of custom unit file
+- Model configuration via Ollama Modelfile instead of LocalAI YAML
+- Ollama installer manages its own system user and service unit
+
+### Removed
+
+- LocalAI binary download and llama-cpp backend installation
+- Custom system user/group creation (Ollama installer handles this)
+- GGUF file download (Ollama pulls models from its own registry)
+- Custom systemd unit file generation
+
 ## [1.0.0] - 2026-02-16
 
 ### Added

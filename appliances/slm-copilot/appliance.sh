@@ -3,18 +3,18 @@
 # SLM-Copilot -- ONE-APPS Appliance Lifecycle Script
 #
 # Implements the one-apps service_* interface for a sovereign AI coding
-# assistant powered by LocalAI + Devstral Small 2 24B, packaged as an
+# assistant powered by Ollama + Devstral Small 2 24B, packaged as an
 # OpenNebula marketplace appliance. CPU-only inference, no GPU required.
 # --------------------------------------------------------------------------
 
 # shellcheck disable=SC2034  # ONE_SERVICE_* vars used by one-apps framework
 
 ONE_SERVICE_NAME='Service SLM-Copilot - Sovereign AI Coding Assistant'
-ONE_SERVICE_VERSION='1.0.0'
+ONE_SERVICE_VERSION='1.1.0'
 ONE_SERVICE_BUILD=$(date +%s)
 ONE_SERVICE_SHORT_DESCRIPTION='CPU-only AI coding copilot (Devstral Small 2 24B)'
 ONE_SERVICE_DESCRIPTION='Sovereign AI coding assistant serving Devstral Small 2 24B
-via LocalAI. OpenAI-compatible API for Cline/VS Code integration.
+via Ollama. OpenAI-compatible API for Cline/VS Code integration.
 CPU-only inference, no GPU required.'
 ONE_SERVICE_RECONFIGURABLE=true
 
@@ -45,19 +45,11 @@ ONEAPP_COPILOT_DOMAIN="${ONEAPP_COPILOT_DOMAIN:-}"
 # --------------------------------------------------------------------------
 # Constants
 # --------------------------------------------------------------------------
-readonly LOCALAI_VERSION="3.11.0"
-readonly LOCALAI_BASE_DIR="/opt/local-ai"
-readonly LOCALAI_BIN="${LOCALAI_BASE_DIR}/bin/local-ai"
-readonly LOCALAI_MODELS_DIR="${LOCALAI_BASE_DIR}/models"
-readonly LOCALAI_CONFIG_DIR="${LOCALAI_BASE_DIR}/config"
-readonly LOCALAI_BACKENDS_DIR="${LOCALAI_BASE_DIR}/backends"
-readonly LOCALAI_ENV_FILE="${LOCALAI_CONFIG_DIR}/local-ai.env"
-readonly LOCALAI_SYSTEMD_UNIT="/etc/systemd/system/local-ai.service"
-readonly LOCALAI_MODEL_NAME="devstral-small-2"
-readonly LOCALAI_GGUF_FILE="devstral-small-2-q4km.gguf"
-readonly LOCALAI_GGUF_URL="https://huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
-readonly LOCALAI_UID=49999
-readonly LOCALAI_GID=49999
+readonly OLLAMA_MODEL_TAG="devstral"
+readonly OLLAMA_MODEL_NAME="devstral-small-2"
+readonly OLLAMA_PORT=11434
+readonly OLLAMA_SYSTEMD_OVERRIDE="/etc/systemd/system/ollama.service.d/override.conf"
+readonly OLLAMA_MODELFILE="/etc/ollama/Modelfile"
 readonly NGINX_CONF="/etc/nginx/sites-available/slm-copilot.conf"
 readonly NGINX_CERT_DIR="/etc/ssl/slm-copilot"
 readonly NGINX_HTPASSWD="/etc/nginx/.htpasswd"
@@ -115,8 +107,8 @@ write_report_file() {
     fi
 
     # Query live service status
-    local _localai_status
-    _localai_status=$(systemctl is-active local-ai 2>/dev/null || echo unknown)
+    local _ollama_status
+    _ollama_status=$(systemctl is-active ollama 2>/dev/null || echo unknown)
     local _nginx_status
     _nginx_status=$(systemctl is-active nginx 2>/dev/null || echo unknown)
 
@@ -132,13 +124,13 @@ api_password = ${_password}
 
 [Model]
 name         = devstral-small-2
-backend      = llama-cpp
+backend      = ollama (llama.cpp)
 quantization = Q4_K_M (24B parameters)
 context_size = ${ONEAPP_COPILOT_CONTEXT_SIZE}
 threads      = ${ONEAPP_COPILOT_THREADS}
 
 [Service status]
-local-ai     = ${_localai_status}
+ollama       = ${_ollama_status}
 nginx        = ${_nginx_status}
 tls          = ${_tls_mode}
 
@@ -191,99 +183,48 @@ service_install() {
     # Create ACME challenge directory for certbot webroot
     mkdir -p /var/www/acme-challenge
 
-    # 2. Create system user and group
-    groupadd --system --gid "${LOCALAI_GID}" localai 2>/dev/null || true
-    useradd --system --uid "${LOCALAI_UID}" --gid "${LOCALAI_GID}" \
-        --home-dir "${LOCALAI_BASE_DIR}" --shell /usr/sbin/nologin localai 2>/dev/null || true
+    # 2. Install Ollama
+    log_copilot info "Installing Ollama"
+    curl -fsSL https://ollama.com/install.sh | sh
 
-    # 3. Create directory structure
-    mkdir -p "${LOCALAI_BASE_DIR}/bin" \
-             "${LOCALAI_MODELS_DIR}" \
-             "${LOCALAI_CONFIG_DIR}" \
-             "${LOCALAI_BACKENDS_DIR}"
+    # 3. Start Ollama temporarily for model pull
+    log_copilot info "Starting Ollama for model pull"
+    systemctl start ollama
+    wait_for_ollama
 
-    # 4. Download LocalAI binary
-    log_copilot info "Downloading LocalAI v${LOCALAI_VERSION} binary"
-    curl -fSL -o "${LOCALAI_BIN}" \
-        "https://github.com/mudler/LocalAI/releases/download/v${LOCALAI_VERSION}/local-ai-v${LOCALAI_VERSION}-linux-amd64"
-    chmod +x "${LOCALAI_BIN}"
+    # 4. Pull Devstral model from Ollama registry
+    log_copilot info "Pulling ${OLLAMA_MODEL_TAG} model (this may take a while)"
+    ollama pull "${OLLAMA_MODEL_TAG}"
 
-    # 5. Pre-install llama-cpp backend (INFER-09)
-    log_copilot info "Pre-installing llama-cpp backend"
-    "${LOCALAI_BIN}" backends install --backends-path "${LOCALAI_BACKENDS_DIR}" llama-cpp
+    # 5. Create custom model with Modelfile
+    mkdir -p "$(dirname "${OLLAMA_MODELFILE}")"
+    cat > "${OLLAMA_MODELFILE}" <<MODELFILE
+FROM ${OLLAMA_MODEL_TAG}
+PARAMETER temperature 0.15
+PARAMETER top_p 0.95
+PARAMETER num_ctx 2048
+PARAMETER num_thread 2
+MODELFILE
+    log_copilot info "Creating custom model ${OLLAMA_MODEL_NAME} from Modelfile"
+    ollama create "${OLLAMA_MODEL_NAME}" -f "${OLLAMA_MODELFILE}"
 
-    # 6. Download GGUF model (INFER-03)
-    log_copilot info "Downloading Devstral Small 2 Q4_K_M model (~14.3 GB)"
-    curl -fSL -C - -o "${LOCALAI_MODELS_DIR}/${LOCALAI_GGUF_FILE}" \
-        "${LOCALAI_GGUF_URL}"
-
-    # Verify download size
-    local _file_size
-    _file_size=$(stat -c%s "${LOCALAI_MODELS_DIR}/${LOCALAI_GGUF_FILE}")
-    if [ "${_file_size}" -lt 14000000000 ]; then
-        log_copilot error "GGUF file is only ${_file_size} bytes -- expected ~14.3 GB. Download may be corrupted."
-        exit 1
-    fi
-    log_copilot info "GGUF model downloaded ($((_file_size / 1073741824)) GB)"
-
-    # 7. Build-time pre-warming (INFER-09 verification)
-    # Generate a minimal model YAML for pre-warming
-    cat > "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml" <<YAML
-name: ${LOCALAI_MODEL_NAME}
-backend: llama-cpp
-parameters:
-  model: ${LOCALAI_GGUF_FILE}
-context_size: 2048
-threads: 2
-mmap: true
-mmlock: false
-use_jinja: true
-YAML
-
-    log_copilot info "Pre-warming: starting LocalAI for build-time verification"
-    "${LOCALAI_BIN}" run \
-        --address 127.0.0.1:8080 \
-        --models-path "${LOCALAI_MODELS_DIR}" \
-        --backends-path "${LOCALAI_BACKENDS_DIR}" \
-        --disable-web-ui &
-    local _prewarm_pid=$!
-
-    # Wait for readiness (model loading can take 60-180s on CPU)
-    local _elapsed=0
-    while ! curl -sf http://127.0.0.1:8080/readyz >/dev/null 2>&1; do
-        sleep 5
-        _elapsed=$((_elapsed + 5))
-        if [ "${_elapsed}" -ge 300 ]; then
-            log_copilot error "Pre-warm: LocalAI not ready after 300s"
-            kill "${_prewarm_pid}" 2>/dev/null || true
-            wait "${_prewarm_pid}" 2>/dev/null || true
-            exit 1
-        fi
-    done
-    log_copilot info "Pre-warm: LocalAI ready (${_elapsed}s)"
-
-    # Run smoke test to verify inference works (INFER-01, INFER-02, INFER-05)
-    smoke_test "http://127.0.0.1:8080" || {
-        kill "${_prewarm_pid}" 2>/dev/null || true
-        wait "${_prewarm_pid}" 2>/dev/null || true
+    # 6. Build-time smoke test
+    smoke_test "http://127.0.0.1:${OLLAMA_PORT}" || {
+        systemctl stop ollama
         exit 1
     }
 
     # Clean shutdown
-    kill "${_prewarm_pid}"
-    wait "${_prewarm_pid}" 2>/dev/null || true
-    log_copilot info "Pre-warm: LocalAI shut down"
+    systemctl stop ollama
+    log_copilot info "Ollama stopped after build-time verification"
 
-    # Remove pre-warm model YAML (service_configure generates the real one)
-    rm -f "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml"
-
-    # 8. Install SSH login banner (ONE-08)
+    # 7. Install SSH login banner
     cat > /etc/profile.d/slm-copilot-banner.sh <<'BANNER_EOF'
 #!/bin/bash
 [[ $- == *i* ]] || return
 _vm_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 _password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'see report')
-_localai=$(systemctl is-active local-ai 2>/dev/null || echo 'unknown')
+_ollama=$(systemctl is-active ollama 2>/dev/null || echo 'unknown')
 _nginx=$(systemctl is-active nginx 2>/dev/null || echo 'unknown')
 printf '\n'
 printf '  SLM-Copilot -- Sovereign AI Coding Assistant\n'
@@ -292,7 +233,7 @@ printf '  Endpoint : https://%s\n' "${_vm_ip}"
 printf '  Username : copilot\n'
 printf '  Password : %s\n' "${_password}"
 printf '  Model    : devstral-small-2 (24B Q4_K_M)\n'
-printf '  LocalAI  : %s\n' "${_localai}"
+printf '  Ollama   : %s\n' "${_ollama}"
 printf '  Nginx    : %s\n' "${_nginx}"
 printf '\n'
 printf '  Report   : cat /etc/one-appliance/config\n'
@@ -301,10 +242,7 @@ printf '\n'
 BANNER_EOF
     chmod 0644 /etc/profile.d/slm-copilot-banner.sh
 
-    # 9. Set ownership
-    chown -R "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_BASE_DIR}"
-
-    log_copilot info "SLM-Copilot appliance install complete (LocalAI v${LOCALAI_VERSION})"
+    log_copilot info "SLM-Copilot appliance install complete (Ollama)"
 }
 
 # ==========================================================================
@@ -318,25 +256,18 @@ service_configure() {
     # 1. Validate context variables (fail-fast on invalid values)
     validate_config
 
-    # 2. Ensure directory structure exists (idempotent)
-    mkdir -p "${LOCALAI_MODELS_DIR}" "${LOCALAI_CONFIG_DIR}"
-
-    # 3. Check for AVX2 support (warn only, don't fail)
+    # 2. Check for AVX2 support (warn only, don't fail)
     if ! grep -q avx2 /proc/cpuinfo; then
-        log_copilot warning "CPU does not support AVX2 -- LocalAI inference may fail (SIGILL) or be very slow"
+        log_copilot warning "CPU does not support AVX2 -- Ollama inference may fail (SIGILL) or be very slow"
     fi
 
-    # 4. Generate model YAML (INFER-01, INFER-06, INFER-07)
-    #    CRITICAL: use_jinja must be true for Devstral chat template
-    generate_model_yaml
+    # 3. Generate Modelfile (applied in bootstrap after Ollama starts)
+    generate_modelfile
 
-    # 5. Generate environment file
-    generate_env_file
+    # 4. Generate systemd drop-in override for Ollama
+    generate_ollama_env
 
-    # 6. Generate systemd unit file (INFER-04, INFER-08)
-    generate_systemd_unit
-
-    # 7. Reload systemd
+    # 5. Reload systemd
     systemctl daemon-reload
 
     # Phase 2: Nginx reverse proxy with TLS and auth
@@ -356,24 +287,28 @@ service_bootstrap() {
     log_copilot info "=== service_bootstrap started ==="
     log_copilot info "Bootstrapping SLM-Copilot"
 
-    # 1. Enable and start LocalAI
-    systemctl enable local-ai.service
-    systemctl start local-ai.service
+    # 1. Enable and start Ollama
+    systemctl enable ollama.service
+    systemctl start ollama.service
 
-    # 2. Wait for readiness (INFER-05)
-    wait_for_localai
+    # 2. Wait for readiness
+    wait_for_ollama
+
+    # 3. Apply Modelfile (requires running server)
+    log_copilot info "Applying Modelfile to create ${OLLAMA_MODEL_NAME}"
+    ollama create "${OLLAMA_MODEL_NAME}" -f "${OLLAMA_MODELFILE}"
 
     # Phase 2: Start Nginx reverse proxy
     systemctl enable nginx
     systemctl restart nginx
 
-    # Phase 2: Attempt Let's Encrypt if domain is configured (SEC-06, SEC-07)
+    # Phase 2: Attempt Let's Encrypt if domain is configured
     attempt_letsencrypt
 
-    # Phase 3: Write report file with connection info, credentials, Cline config (ONE-02, ONE-05)
+    # Phase 3: Write report file with connection info, credentials, Cline config
     write_report_file
 
-    log_copilot info "SLM-Copilot bootstrap complete -- LocalAI on 127.0.0.1:8080, Nginx on 0.0.0.0:443"
+    log_copilot info "SLM-Copilot bootstrap complete -- Ollama on 127.0.0.1:${OLLAMA_PORT}, Nginx on 0.0.0.0:443"
 }
 
 # ==========================================================================
@@ -394,7 +329,7 @@ service_help() {
 SLM-Copilot Appliance
 =====================
 
-Sovereign AI coding assistant powered by LocalAI serving Devstral Small 2
+Sovereign AI coding assistant powered by Ollama serving Devstral Small 2
 24B (Q4_K_M quantization) on CPU. OpenAI-compatible API for Cline/VS Code.
 Nginx reverse proxy with TLS, basic auth, CORS, and SSE streaming.
 
@@ -411,24 +346,23 @@ Configuration variables (set via OpenNebula context):
 Ports:
   80    HTTP redirect to HTTPS (+ ACME challenge for Let's Encrypt)
   443   HTTPS API (TLS + basic auth)
-  8080  LocalAI API (127.0.0.1 only -- not exposed to the network)
+  11434 Ollama API (127.0.0.1 only -- not exposed to the network)
 
 Service management:
-  systemctl status local-ai          Check inference server status
-  systemctl restart local-ai         Restart the inference server
+  systemctl status ollama            Check inference server status
+  systemctl restart ollama           Restart the inference server
   systemctl status nginx             Check reverse proxy status
   systemctl restart nginx            Restart the reverse proxy
-  journalctl -u local-ai -f          Follow inference server logs
+  journalctl -u ollama -f            Follow inference server logs
   journalctl -u nginx -f             Follow reverse proxy logs
 
 Configuration files:
-  /opt/local-ai/models/devstral-small-2.yaml   Model configuration
-  /opt/local-ai/config/local-ai.env            Environment variables
-  /etc/systemd/system/local-ai.service         Systemd unit
-  /etc/nginx/sites-available/slm-copilot.conf  Nginx reverse proxy config
-  /etc/nginx/.htpasswd                         Basic auth password file
-  /etc/ssl/slm-copilot/cert.pem               TLS certificate (symlink)
-  /etc/ssl/slm-copilot/key.pem                TLS private key (symlink)
+  /etc/ollama/Modelfile                                  Model configuration
+  /etc/systemd/system/ollama.service.d/override.conf     Ollama environment overrides
+  /etc/nginx/sites-available/slm-copilot.conf            Nginx reverse proxy config
+  /etc/nginx/.htpasswd                                   Basic auth password file
+  /etc/ssl/slm-copilot/cert.pem                          TLS certificate (symlink)
+  /etc/ssl/slm-copilot/key.pem                           TLS private key (symlink)
 
 Report and logs:
   /etc/one-appliance/config                    Service report (credentials, Cline config)
@@ -449,89 +383,51 @@ HELP
 }
 
 # ==========================================================================
-#  HELPER: generate_model_yaml  (write model configuration)
+#  HELPER: generate_modelfile  (write Ollama Modelfile)
 # ==========================================================================
-generate_model_yaml() {
-    cat > "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml" <<YAML
-# Devstral Small 2 24B (Q4_K_M) -- generated at $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-name: ${LOCALAI_MODEL_NAME}
-backend: llama-cpp
-parameters:
-  model: ${LOCALAI_GGUF_FILE}
-  temperature: 0.15
-  top_p: 0.95
-context_size: ${ONEAPP_COPILOT_CONTEXT_SIZE}
-threads: ${ONEAPP_COPILOT_THREADS}
-mmap: true
-mmlock: false
-use_jinja: true
-YAML
-    chown "${LOCALAI_UID}:${LOCALAI_GID}" "${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml"
-    log_copilot info "Model YAML written to ${LOCALAI_MODELS_DIR}/${LOCALAI_MODEL_NAME}.yaml (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS})"
+generate_modelfile() {
+    mkdir -p "$(dirname "${OLLAMA_MODELFILE}")"
+    cat > "${OLLAMA_MODELFILE}" <<MODELFILE
+FROM ${OLLAMA_MODEL_TAG}
+PARAMETER temperature 0.15
+PARAMETER top_p 0.95
+PARAMETER num_ctx ${ONEAPP_COPILOT_CONTEXT_SIZE}
+PARAMETER num_thread ${ONEAPP_COPILOT_THREADS}
+MODELFILE
+    log_copilot info "Modelfile written to ${OLLAMA_MODELFILE} (num_ctx=${ONEAPP_COPILOT_CONTEXT_SIZE}, num_thread=${ONEAPP_COPILOT_THREADS})"
 }
 
 # ==========================================================================
-#  HELPER: generate_env_file  (write environment configuration)
+#  HELPER: generate_ollama_env  (write systemd drop-in override)
 # ==========================================================================
-generate_env_file() {
-    cat > "${LOCALAI_ENV_FILE}" <<EOF
-# LocalAI environment -- generated at $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LOCALAI_THREADS=${ONEAPP_COPILOT_THREADS}
-LOCALAI_CONTEXT_SIZE=${ONEAPP_COPILOT_CONTEXT_SIZE}
-LOCALAI_LOG_LEVEL=info
-EOF
-    chmod 0640 "${LOCALAI_ENV_FILE}"
-    log_copilot info "Environment file written to ${LOCALAI_ENV_FILE}"
-}
-
-# ==========================================================================
-#  HELPER: generate_systemd_unit  (write systemd service file)
-# ==========================================================================
-generate_systemd_unit() {
-    cat > "${LOCALAI_SYSTEMD_UNIT}" <<EOF
-[Unit]
-Description=LocalAI LLM Inference Server (SLM-Copilot)
-After=network-online.target
-Wants=network-online.target
-
+generate_ollama_env() {
+    mkdir -p "$(dirname "${OLLAMA_SYSTEMD_OVERRIDE}")"
+    cat > "${OLLAMA_SYSTEMD_OVERRIDE}" <<EOF
 [Service]
-Type=simple
-User=localai
-Group=localai
-EnvironmentFile=${LOCALAI_ENV_FILE}
-ExecStart=${LOCALAI_BIN} run \\
-    --address 127.0.0.1:8080 \\
-    --models-path ${LOCALAI_MODELS_DIR} \\
-    --backends-path ${LOCALAI_BACKENDS_DIR} \\
-    --disable-web-ui
-Restart=on-failure
-RestartSec=10
-TimeoutStartSec=300
-LimitNOFILE=65536
-OOMScoreAdjust=-500
-
-[Install]
-WantedBy=multi-user.target
+Environment="OLLAMA_HOST=127.0.0.1:${OLLAMA_PORT}"
+Environment="OLLAMA_KEEP_ALIVE=24h"
+Environment="OLLAMA_FLASH_ATTENTION=1"
+Environment="OLLAMA_NUM_PARALLEL=1"
 EOF
-    log_copilot info "Systemd unit written to ${LOCALAI_SYSTEMD_UNIT}"
+    log_copilot info "Ollama systemd override written to ${OLLAMA_SYSTEMD_OVERRIDE}"
 }
 
 # ==========================================================================
-#  HELPER: wait_for_localai  (poll /readyz, 300s timeout)
+#  HELPER: wait_for_ollama  (poll root endpoint, 300s timeout)
 # ==========================================================================
-wait_for_localai() {
+wait_for_ollama() {
     local _timeout=300
     local _elapsed=0
-    log_copilot info "Waiting for LocalAI readiness (timeout: ${_timeout}s)"
-    while ! curl -sf http://127.0.0.1:8080/readyz >/dev/null 2>&1; do
+    log_copilot info "Waiting for Ollama readiness (timeout: ${_timeout}s)"
+    while ! curl -sf "http://127.0.0.1:${OLLAMA_PORT}/" >/dev/null 2>&1; do
         sleep 5
         _elapsed=$((_elapsed + 5))
         if [ "${_elapsed}" -ge "${_timeout}" ]; then
-            log_copilot error "LocalAI not ready after ${_timeout}s -- check: journalctl -u local-ai"
+            log_copilot error "Ollama not ready after ${_timeout}s -- check: journalctl -u ollama"
             exit 1
         fi
     done
-    log_copilot info "LocalAI ready (${_elapsed}s)"
+    log_copilot info "Ollama ready (${_elapsed}s)"
 }
 
 # ==========================================================================
@@ -579,15 +475,15 @@ validate_config() {
 #  HELPER: smoke_test  (verify chat completions, streaming, and health)
 # ==========================================================================
 smoke_test() {
-    local _endpoint="${1:-http://127.0.0.1:8080}"
+    local _endpoint="${1:-http://127.0.0.1:${OLLAMA_PORT}}"
 
     log_copilot info "Running smoke test against ${_endpoint}"
 
-    # Test 1: Non-streaming chat completion (INFER-01)
+    # Test 1: Non-streaming chat completion
     local _response
     _response=$(curl -sf "${_endpoint}/v1/chat/completions" \
         -H 'Content-Type: application/json' \
-        -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Write a Python hello world\"}],\"max_tokens\":50}") || {
+        -d "{\"model\":\"${OLLAMA_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Write a Python hello world\"}],\"max_tokens\":50}") || {
         log_copilot error "Smoke test: chat completion request failed"
         return 1
     }
@@ -597,19 +493,19 @@ smoke_test() {
     }
     log_copilot info "Smoke test: chat completion OK"
 
-    # Test 2: Streaming chat completion (INFER-02)
+    # Test 2: Streaming chat completion
     curl -sf "${_endpoint}/v1/chat/completions" \
         -H 'Content-Type: application/json' \
-        -d "{\"model\":\"${LOCALAI_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":10,\"stream\":true}" \
+        -d "{\"model\":\"${OLLAMA_MODEL_NAME}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":10,\"stream\":true}" \
         | grep -q 'data:' || {
         log_copilot error "Smoke test: streaming response has no SSE data lines"
         return 1
     }
     log_copilot info "Smoke test: streaming OK"
 
-    # Test 3: Health endpoint (INFER-05)
-    curl -sf "${_endpoint}/readyz" >/dev/null 2>&1 || {
-        log_copilot error "Smoke test: /readyz did not return 200"
+    # Test 3: Health endpoint (Ollama root returns "Ollama is running")
+    curl -sf "${_endpoint}/" >/dev/null 2>&1 || {
+        log_copilot error "Smoke test: health check (/) did not return 200"
         return 1
     }
     log_copilot info "Smoke test: health check OK"
@@ -710,7 +606,7 @@ server {
     # --- Health check endpoints (no auth) ---
     location = /readyz {
         auth_basic off;
-        proxy_pass http://127.0.0.1:8080/readyz;
+        proxy_pass http://127.0.0.1:11434/;
     }
 
     location = /health {
@@ -735,15 +631,15 @@ server {
         auth_basic "SLM-Copilot API";
         auth_basic_user_file /etc/nginx/.htpasswd;
 
-        # Reverse proxy to LocalAI
-        proxy_pass http://127.0.0.1:8080;
+        # Reverse proxy to Ollama
+        proxy_pass http://127.0.0.1:11434;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # SSE streaming (ALL required -- see 02-RESEARCH.md Pattern 4)
+        # SSE streaming (ALL required)
         proxy_buffering off;
         proxy_cache off;
         proxy_set_header Connection '';

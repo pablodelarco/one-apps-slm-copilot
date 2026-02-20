@@ -2,19 +2,19 @@
 #
 # After a successful build, update these PLACEHOLDER values:
 #   1. images[0].url          -- Replace PUBLISH_URL with actual hosting URL
-#   2. images[0].checksum.md5 -- From: md5sum build/export/slm-copilot-1.0.0.qcow2
-#   3. images[0].checksum.sha256 -- From: sha256sum build/export/slm-copilot-1.0.0.qcow2
-#   4. images[0].size         -- From: qemu-img info --output=json build/export/slm-copilot-1.0.0.qcow2 | jq '.["virtual-size"]'
+#   2. images[0].checksum.md5 -- From: md5sum build/export/slm-copilot-1.1.0.qcow2
+#   3. images[0].checksum.sha256 -- From: sha256sum build/export/slm-copilot-1.1.0.qcow2
+#   4. images[0].size         -- From: qemu-img info --output=json build/export/slm-copilot-1.1.0.qcow2 | jq '.["virtual-size"]'
 #   5. Rename this file to a UUID for marketplace PR: cp marketplace.yaml $(uuidgen).yaml
 #
 ---
-name: SLM-Copilot 1.0.0
-version: 1.0.0
+name: SLM-Copilot 1.1.0
+version: 1.1.0
 publisher: OpenNebula Systems
 description: |-
   One-click sovereign AI coding assistant powered by
   [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B, Mistral AI)
-  running on CPU via [LocalAI](https://localai.io/). Not all AI needs GPU --
+  running on CPU via [Ollama](https://ollama.com/). Not all AI needs GPU --
   this 24B parameter model delivers practical coding assistance on any 32 GB
   VM with 16+ vCPUs. Import, instantiate, code.
 
@@ -47,7 +47,7 @@ tags:
   - copilot
   - sovereign
   - cpu
-  - localai
+  - ollama
   - devstral
   - cline
   - ubuntu
@@ -80,7 +80,7 @@ opennebula_template:
 logo: slm-copilot.png
 images:
   - name: slm_copilot_os
-    url: 'https://PUBLISH_URL/slm-copilot-1.0.0.qcow2'
+    url: 'https://PUBLISH_URL/slm-copilot-1.1.0.qcow2'
     type: OS
     dev_prefix: vd
     driver: qcow2
