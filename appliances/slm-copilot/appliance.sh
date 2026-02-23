@@ -189,13 +189,10 @@ service_install() {
         -DCMAKE_BUILD_TYPE=Release
     cmake --build "${_build_dir}/build" --target llama-server -j"$(nproc)"
 
-    # 3. Install binary, shared libs, and CPU backend variants
+    # 3. Install binary and all shared libs (libllama, libggml, libmtmd, CPU backends)
     install -m 0755 "${_build_dir}/build/bin/llama-server" "${LLAMA_BIN}"
-    cp -a "${_build_dir}"/build/src/libllama.so* /usr/local/lib/ 2>/dev/null || true
-    cp -a "${_build_dir}"/build/ggml/src/libggml*.so* /usr/local/lib/ 2>/dev/null || true
-    # GGML_BACKEND_DL: install CPU variant backends (.so plugins)
-    find "${_build_dir}/build" -name "ggml-cpu-*.so" -exec cp -a {} /usr/local/lib/ \; 2>/dev/null || true
-    find "${_build_dir}/build" -name "ggml-*.so" -path "*/ggml/src/*" -exec cp -a {} /usr/local/lib/ \; 2>/dev/null || true
+    find "${_build_dir}/build" -name "*.so*" -type f -exec cp -a {} /usr/local/lib/ \;
+    find "${_build_dir}/build" -name "*.so*" -type l -exec cp -a {} /usr/local/lib/ \;
     ldconfig
 
     log_copilot info "llama-server installed to ${LLAMA_BIN}"
