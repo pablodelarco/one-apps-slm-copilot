@@ -56,9 +56,9 @@ readonly LLAMA_SYSTEMD_UNIT="/etc/systemd/system/slm-copilot.service"
 readonly LLAMA_ENV_FILE="/etc/slm-copilot/env"
 readonly COPILOT_LOG="/var/log/one-appliance/slm-copilot.log"
 
-# Model GGUF filename (Devstral Small 2 24B Q4_K_M)
-readonly MODEL_GGUF="Devstral-Small-24B-2506-Q4_K_M.gguf"
-readonly MODEL_HF_REPO="bartowski/Devstral-Small-24B-2506-GGUF"
+# Model GGUF filename (Devstral Small 2 24B Instruct Q4_K_M)
+readonly MODEL_GGUF="Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
+readonly MODEL_HF_REPO="unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF"
 
 # ==========================================================================
 #  LOGGING: dedicated application log helpers
