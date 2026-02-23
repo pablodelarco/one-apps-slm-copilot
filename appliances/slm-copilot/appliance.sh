@@ -31,7 +31,7 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)' '0'
     'ONEAPP_COPILOT_PASSWORD'      'configure' 'API password (auto-generated if empty)'      ''
     'ONEAPP_COPILOT_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
-    'ONEAPP_COPILOT_MODEL'         'configure' 'Model name (default: devstral)'              'devstral'
+    'ONEAPP_COPILOT_MODEL'         'configure' 'Model: devstral (built-in) or GGUF URL'       'devstral'
 )
 
 # --------------------------------------------------------------------------
@@ -124,9 +124,9 @@ endpoint     = ${_endpoint}
 api_key      = ${_password}
 
 [Model]
-name         = devstral-small-2
+name         = ${ACTIVE_MODEL_ID}
 backend      = llama.cpp (llama-server)
-quantization = Q4_K_M (24B parameters)
+model_path   = ${ACTIVE_MODEL_PATH}
 context_size = ${ONEAPP_COPILOT_CONTEXT_SIZE}
 threads      = ${ONEAPP_COPILOT_THREADS}
 
@@ -141,20 +141,20 @@ tls          = ${_tls_mode}
 4. Enter these values:
    Base URL  : ${_endpoint}/v1
    API Key   : ${_password}
-   Model ID  : devstral-small-2
+   Model ID  : ${ACTIVE_MODEL_ID}
 
 [Cline JSON snippet]
 {
   "apiProvider": "openai-compatible",
   "openAiBaseUrl": "${_endpoint}/v1",
   "openAiApiKey": "${_password}",
-  "openAiModelId": "devstral-small-2"
+  "openAiModelId": "${ACTIVE_MODEL_ID}"
 }
 
 [Test with curl]
 curl -k -H "Authorization: Bearer ${_password}" ${_endpoint}/v1/chat/completions \\
   -H 'Content-Type: application/json' \\
-  -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"${ACTIVE_MODEL_ID}","messages":[{"role":"user","content":"Hello"}]}'
 EOF
 
     chmod 600 "${_report}"
@@ -264,12 +264,13 @@ UNIT_EOF
 _vm_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 _password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'see report')
 _llama=$(systemctl is-active slm-copilot 2>/dev/null || echo 'unknown')
+_model=$(basename "$(grep '^LLAMA_MODEL=' /etc/slm-copilot/env 2>/dev/null | cut -d= -f2-)" .gguf 2>/dev/null || echo 'unknown')
 printf '\n'
 printf '  SLM-Copilot -- Sovereign AI Coding Assistant\n'
 printf '  =============================================\n'
 printf '  Endpoint : https://%s:8443\n' "${_vm_ip}"
 printf '  API Key  : %s\n' "${_password}"
-printf '  Model    : devstral-small-2 (24B Q4_K_M)\n'
+printf '  Model    : %s\n' "${_model}"
 printf '  Backend  : llama-server (llama.cpp)\n'
 printf '  Status   : %s\n' "${_llama}"
 printf '\n'
@@ -298,16 +299,19 @@ service_configure() {
         log_copilot warning "CPU does not support AVX2 -- llama-server inference may be slow (GGML_CPU_ALL_VARIANTS provides fallback)"
     fi
 
-    # 3. Generate/persist TLS certificate
+    # 3. Resolve model (built-in or download custom GGUF)
+    resolve_model
+
+    # 4. Generate/persist TLS certificate
     generate_selfsigned_cert
 
-    # 4. Generate/persist API password
+    # 5. Generate/persist API password
     generate_password
 
-    # 5. Write llama-server environment file
+    # 6. Write llama-server environment file
     generate_llama_env
 
-    # 6. Reload systemd to pick up any env file changes
+    # 7. Reload systemd to pick up any env file changes
     systemctl daemon-reload
 
     log_copilot info "SLM-Copilot configuration complete"
@@ -320,6 +324,9 @@ service_bootstrap() {
     init_copilot_log
     log_copilot info "=== service_bootstrap started ==="
     log_copilot info "Bootstrapping SLM-Copilot"
+
+    # 0. Load model info persisted by service_configure
+    _load_model_info
 
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
     attempt_letsencrypt
@@ -367,7 +374,8 @@ Configuration variables (set via OpenNebula context):
   ONEAPP_COPILOT_PASSWORD       API key / Bearer token (auto-generated 16-char if empty)
   ONEAPP_COPILOT_DOMAIN         FQDN for Let's Encrypt certificate (optional)
                                 If empty, self-signed certificate is used
-  ONEAPP_COPILOT_MODEL          Model name identifier (default: devstral)
+  ONEAPP_COPILOT_MODEL          Model: 'devstral' (built-in) or a GGUF URL
+                                Example URL: https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
 
 Ports:
   8443  HTTPS API (TLS + Bearer token auth + Prometheus metrics)
@@ -401,6 +409,90 @@ Test inference:
 Password retrieval:
   cat /var/lib/slm-copilot/password
 HELP
+}
+
+# ==========================================================================
+#  HELPER: resolve_model  (determine model GGUF path, download if URL)
+# ==========================================================================
+
+# Globals set by resolve_model(), consumed by generate_llama_env/write_report
+ACTIVE_MODEL_PATH=""
+ACTIVE_MODEL_ID=""
+
+resolve_model() {
+    local _model="${ONEAPP_COPILOT_MODEL:-devstral}"
+
+    if [ "${_model}" = "devstral" ]; then
+        # Built-in model (baked into image at install time)
+        ACTIVE_MODEL_PATH="${LLAMA_MODEL_DIR}/${MODEL_GGUF}"
+        ACTIVE_MODEL_ID="devstral-small-2"
+        log_copilot info "Using built-in model: ${ACTIVE_MODEL_ID}"
+
+        if [ ! -f "${ACTIVE_MODEL_PATH}" ]; then
+            log_copilot error "Built-in model not found at ${ACTIVE_MODEL_PATH}"
+            exit 1
+        fi
+        _persist_model_info
+        return 0
+    fi
+
+    # Treat as a direct GGUF download URL
+    if [[ "${_model}" =~ ^https?:// ]]; then
+        local _filename
+        _filename=$(basename "${_model}" | sed 's/[?#].*//')
+
+        # Validate filename looks like a GGUF
+        if [[ ! "${_filename}" =~ \.gguf$ ]]; then
+            log_copilot error "ONEAPP_COPILOT_MODEL URL must point to a .gguf file (got: ${_filename})"
+            exit 1
+        fi
+
+        ACTIVE_MODEL_PATH="${LLAMA_MODEL_DIR}/${_filename}"
+        # Derive model ID from filename (strip extension and quant suffix)
+        ACTIVE_MODEL_ID=$(echo "${_filename}" | sed 's/\.gguf$//; s/-Q[0-9].*$//' | tr '[:upper:]' '[:lower:]')
+
+        # Skip download if file already exists and is non-trivial size
+        if [ -f "${ACTIVE_MODEL_PATH}" ]; then
+            local _size
+            _size=$(stat -c%s "${ACTIVE_MODEL_PATH}" 2>/dev/null || echo 0)
+            if [ "${_size}" -gt 1000000000 ]; then
+                log_copilot info "Custom model already downloaded: ${_filename} ($(( _size / 1073741824 )) GB)"
+                _persist_model_info
+                return 0
+            fi
+            log_copilot warning "Existing file too small, re-downloading: ${_filename}"
+        fi
+
+        log_copilot info "Downloading custom model: ${_model}"
+        mkdir -p "${LLAMA_MODEL_DIR}"
+        if ! curl -fSL --progress-bar -o "${ACTIVE_MODEL_PATH}" "${_model}"; then
+            log_copilot error "Failed to download model from ${_model}"
+            rm -f "${ACTIVE_MODEL_PATH}"
+            exit 1
+        fi
+
+        local _size
+        _size=$(stat -c%s "${ACTIVE_MODEL_PATH}" 2>/dev/null || echo 0)
+        log_copilot info "Custom model downloaded: ${_filename} ($(( _size / 1073741824 )) GB)"
+        _persist_model_info
+        return 0
+    fi
+
+    log_copilot error "ONEAPP_COPILOT_MODEL='${_model}' -- must be 'devstral' or a direct GGUF URL (https://.../*.gguf)"
+    exit 1
+}
+
+# Persist resolved model path/ID so service_bootstrap can read them
+_persist_model_info() {
+    mkdir -p "${LLAMA_DATA_DIR}"
+    echo "${ACTIVE_MODEL_PATH}" > "${LLAMA_DATA_DIR}/model_path"
+    echo "${ACTIVE_MODEL_ID}" > "${LLAMA_DATA_DIR}/model_id"
+}
+
+# Load persisted model path/ID (for service_bootstrap, which runs in a separate stage)
+_load_model_info() {
+    ACTIVE_MODEL_PATH=$(cat "${LLAMA_DATA_DIR}/model_path" 2>/dev/null || echo "${LLAMA_MODEL_DIR}/${MODEL_GGUF}")
+    ACTIVE_MODEL_ID=$(cat "${LLAMA_DATA_DIR}/model_id" 2>/dev/null || echo "devstral-small-2")
 }
 
 # ==========================================================================
@@ -511,7 +603,7 @@ generate_llama_env() {
     cat > "${LLAMA_ENV_FILE}" <<EOF
 LLAMA_HOST=0.0.0.0
 LLAMA_PORT=${LLAMA_PORT}
-LLAMA_MODEL=${LLAMA_MODEL_DIR}/${MODEL_GGUF}
+LLAMA_MODEL=${ACTIVE_MODEL_PATH}
 LLAMA_CTX_SIZE=${ONEAPP_COPILOT_CONTEXT_SIZE}
 LLAMA_THREADS=${_threads}
 LLAMA_SSL_KEY=${LLAMA_CERT_DIR}/key.pem

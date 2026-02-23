@@ -37,7 +37,7 @@
     MODEL:
       :type: text
       :default: 'devstral'
-      :description: Model name (default: devstral)
+      :description: 'devstral (built-in) or direct GGUF URL'
 
 :one:
   :version: 6.10, 7.0

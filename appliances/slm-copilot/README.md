@@ -67,7 +67,15 @@ All configuration is done via OpenNebula context variables, set when creating or
 | `ONEAPP_COPILOT_DOMAIN` | *(empty)* | FQDN for Let's Encrypt certificate. If empty, a self-signed certificate is generated using the VM's IP address. |
 | `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window size (valid range: 512--131072). Larger values use more RAM for the KV cache. |
 | `ONEAPP_COPILOT_THREADS` | `0` *(auto-detect)* | CPU threads for inference. `0` means auto-detect all available cores. Set to the number of physical cores for best performance. |
-| `ONEAPP_COPILOT_MODEL` | `devstral` | Model name identifier (for future model selection). |
+| `ONEAPP_COPILOT_MODEL` | `devstral` | `devstral` uses the built-in Devstral Small 2 GGUF. To use a different model, paste a direct GGUF download URL (see below). |
+
+**Custom model via URL:** Set `ONEAPP_COPILOT_MODEL` to a HuggingFace GGUF URL to use a different model. The appliance downloads it on first boot (subsequent boots skip the download if the file exists). Example:
+
+```
+https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
+```
+
+The built-in Devstral remains on disk and is used again if you switch back to `devstral`.
 
 **Context size and RAM:** The 24B Q4\_K\_M model uses approximately 14 GB of RAM. The remaining memory is used by the KV cache, which scales with context size. On a 32 GB VM, the default 32K context window leaves adequate headroom. Setting context size to 128K on a 32 GB VM may trigger the OOM killer -- use 64 GB RAM or higher for large context windows.
 
