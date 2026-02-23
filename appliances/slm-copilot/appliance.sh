@@ -172,7 +172,7 @@ service_install() {
     # 1. Install build + runtime dependencies
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
-    apt-get install -y -qq build-essential cmake curl jq certbot libcurl4-openssl-dev >/dev/null
+    apt-get install -y -qq build-essential cmake curl jq certbot libcurl4-openssl-dev libssl-dev >/dev/null
 
     # 2. Clone and compile llama.cpp
     log_copilot info "Cloning llama.cpp at tag ${LLAMA_SERVER_VERSION}"
@@ -184,8 +184,10 @@ service_install() {
     cmake -S "${_build_dir}" -B "${_build_dir}/build" \
         -DGGML_CPU_ALL_VARIANTS=ON \
         -DGGML_BACKEND_DL=ON \
+        -DGGML_BACKEND_DIR=/usr/local/lib \
         -DBUILD_SHARED_LIBS=ON \
         -DLLAMA_CURL=ON \
+        -DLLAMA_OPENSSL=ON \
         -DCMAKE_BUILD_TYPE=Release
     cmake --build "${_build_dir}/build" --target llama-server -j"$(nproc)"
 
@@ -221,7 +223,7 @@ ExecStart=/usr/local/bin/llama-server \
   --model ${LLAMA_MODEL} \
   --ctx-size ${LLAMA_CTX_SIZE} \
   --threads ${LLAMA_THREADS} \
-  --flash-attn \
+  --flash-attn on \
   --mlock \
   --metrics \
   --prio 2 \
