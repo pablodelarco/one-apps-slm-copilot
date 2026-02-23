@@ -46,7 +46,7 @@ ONEAPP_COPILOT_MODEL="${ONEAPP_COPILOT_MODEL:-devstral}"
 # --------------------------------------------------------------------------
 # Constants
 # --------------------------------------------------------------------------
-readonly LLAMA_SERVER_VERSION="b5604"
+readonly LLAMA_SERVER_VERSION="b8133"
 readonly LLAMA_PORT=8443
 readonly LLAMA_CERT_DIR="/etc/ssl/slm-copilot"
 readonly LLAMA_DATA_DIR="/var/lib/slm-copilot"
@@ -183,15 +183,19 @@ service_install() {
     log_copilot info "Compiling llama-server (this may take a while)"
     cmake -S "${_build_dir}" -B "${_build_dir}/build" \
         -DGGML_CPU_ALL_VARIANTS=ON \
+        -DGGML_BACKEND_DL=ON \
         -DBUILD_SHARED_LIBS=ON \
         -DLLAMA_CURL=ON \
         -DCMAKE_BUILD_TYPE=Release
     cmake --build "${_build_dir}/build" --target llama-server -j"$(nproc)"
 
-    # 3. Install binary and shared libs
+    # 3. Install binary, shared libs, and CPU backend variants
     install -m 0755 "${_build_dir}/build/bin/llama-server" "${LLAMA_BIN}"
     cp -a "${_build_dir}"/build/src/libllama.so* /usr/local/lib/ 2>/dev/null || true
     cp -a "${_build_dir}"/build/ggml/src/libggml*.so* /usr/local/lib/ 2>/dev/null || true
+    # GGML_BACKEND_DL: install CPU variant backends (.so plugins)
+    find "${_build_dir}/build" -name "ggml-cpu-*.so" -exec cp -a {} /usr/local/lib/ \; 2>/dev/null || true
+    find "${_build_dir}/build" -name "ggml-*.so" -path "*/ggml/src/*" -exec cp -a {} /usr/local/lib/ \; 2>/dev/null || true
     ldconfig
 
     log_copilot info "llama-server installed to ${LLAMA_BIN}"
