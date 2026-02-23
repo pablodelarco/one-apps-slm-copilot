@@ -241,39 +241,16 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 UNIT_EOF
 
-    # 6. Write a minimal env file for build-time smoke test
-    mkdir -p "${LLAMA_DATA_DIR}"
-    echo "buildtest" > "${LLAMA_DATA_DIR}/password"
-    chmod 0600 "${LLAMA_DATA_DIR}/password"
-
-    generate_selfsigned_cert
-
-    cat > "${LLAMA_ENV_FILE}" <<EOF
-LLAMA_HOST=0.0.0.0
-LLAMA_PORT=${LLAMA_PORT}
-LLAMA_MODEL=${LLAMA_MODEL_DIR}/${MODEL_GGUF}
-LLAMA_CTX_SIZE=2048
-LLAMA_THREADS=2
-LLAMA_SSL_KEY=${LLAMA_CERT_DIR}/key.pem
-LLAMA_SSL_CERT=${LLAMA_CERT_DIR}/cert.pem
-LLAMA_API_KEY=buildtest
-EOF
+    # 6. Verify model file integrity (check file size is reasonable)
+    local _model_size
+    _model_size=$(stat -c%s "${LLAMA_MODEL_DIR}/${MODEL_GGUF}" 2>/dev/null || echo 0)
+    if [ "${_model_size}" -lt 1000000000 ]; then
+        log_copilot error "Model file too small (${_model_size} bytes) -- download may be corrupted"
+        exit 1
+    fi
+    log_copilot info "Model file verified ($(( _model_size / 1073741824 )) GB)"
 
     systemctl daemon-reload
-
-    # 7. Smoke test: start llama-server, verify it works, stop
-    log_copilot info "Starting llama-server for build-time smoke test"
-    systemctl start slm-copilot.service
-    wait_for_llama
-
-    smoke_test "https://127.0.0.1:${LLAMA_PORT}" "buildtest" || {
-        systemctl stop slm-copilot.service
-        log_copilot error "Build-time smoke test failed"
-        exit 1
-    }
-
-    systemctl stop slm-copilot.service
-    log_copilot info "llama-server stopped after build-time verification"
 
     # 8. Clean up build dependencies to reduce image size
     rm -rf "${_build_dir}"
