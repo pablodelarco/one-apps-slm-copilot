@@ -7,3 +7,4 @@
       context:
         ONEAPP_COPILOT_CONTEXT_SIZE: '32768'
         ONEAPP_COPILOT_THREADS: '0'
+        ONEAPP_COPILOT_MODEL: 'devstral'

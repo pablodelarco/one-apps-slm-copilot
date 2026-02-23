@@ -1,22 +1,23 @@
 # SLM-Copilot: Sovereign AI Coding Assistant
 
-Your code never leaves your infrastructure. Deploy a private AI coding copilot on any VM — no GPU, no cloud APIs, no subscriptions.
+Your code never leaves your infrastructure. Deploy a private AI coding copilot on any VM -- no GPU, no cloud APIs, no subscriptions.
 
 | | |
 |---|---|
 | **Model** | Devstral Small 2 (24B, Q4_K_M) by Mistral AI |
-| **Inference** | CPU-only via Ollama — 32 GB RAM minimum |
-| **Security** | TLS + token auth out of the box |
-| **API** | OpenAI-compatible — works with aider, Cline, Continue, and more |
+| **Inference** | CPU-only via llama-server (llama.cpp) -- 32 GB RAM minimum |
+| **Security** | Native TLS + Bearer token auth out of the box |
+| **API** | OpenAI-compatible -- works with aider, Cline, Continue, and more |
+| **Metrics** | Built-in Prometheus endpoint at /metrics |
 | **License** | 100% open-source (Apache 2.0 / MIT) |
 
 ## Quick Start
 
 ```bash
-# 1. Import the appliance from the OpenNebula marketplace (Storage → Apps → "SLM-Copilot")
+# 1. Import the appliance from the OpenNebula marketplace (Storage > Apps > "SLM-Copilot")
 # 2. Create a VM: 32 GB RAM, 16 vCPUs minimum
 # 3. Boot and wait ~2 min, then SSH in:
-cat /etc/one-appliance/config   # shows your API endpoint and password
+cat /etc/one-appliance/config   # shows your API endpoint and API key
 ```
 
 Connect with [aider](https://aider.chat):
@@ -24,8 +25,8 @@ Connect with [aider](https://aider.chat):
 ```bash
 pip install aider-chat
 
-aider --openai-api-key <password> \
-      --openai-api-base https://<vm-ip>/v1 \
+aider --openai-api-key <api-key> \
+      --openai-api-base https://<vm-ip>:8443/v1 \
       --model openai/devstral-small-2 \
       --no-show-model-warnings
 ```
@@ -38,10 +39,11 @@ Set these in the VM template before booting (all optional, re-read on every rebo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ONEAPP_COPILOT_PASSWORD` | *(auto-generated)* | API password |
+| `ONEAPP_COPILOT_PASSWORD` | *(auto-generated)* | API key (Bearer token) |
 | `ONEAPP_COPILOT_DOMAIN` | *(empty)* | FQDN for Let's Encrypt TLS (self-signed if empty) |
-| `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window (512–131072) |
+| `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window (512-131072) |
 | `ONEAPP_COPILOT_THREADS` | `0` | CPU threads for inference (`0` = all cores) |
+| `ONEAPP_COPILOT_MODEL` | `devstral` | Model name identifier |
 
 ## Troubleshooting
 
@@ -50,9 +52,9 @@ Set these in the VM template before booting (all optional, re-read on every rebo
 | Service won't start | VM needs at least 32 GB RAM |
 | Slow inference | Add more vCPUs; CPU must support AVX2 |
 | Let's Encrypt fails | DNS must resolve and port 80 must be reachable |
-| Client can't connect | Port 443 open? Test: `curl -k https://<vm-ip>/readyz` |
+| Client can't connect | Port 8443 open? Test: `curl -k https://<vm-ip>:8443/health` |
 
-Logs: `journalctl -u ollama` (inference) · `journalctl -u nginx` (proxy) · `/etc/one-appliance/config` (credentials)
+Logs: `journalctl -u slm-copilot` (inference) / `/etc/one-appliance/config` (credentials)
 
 ## License
 

@@ -19,8 +19,8 @@ source "qemu" "slm_copilot" {
   accelerator = "kvm"
 
   cpus      = 4
-  memory    = 16384
-  disk_size = "50G"
+  memory    = 32768
+  disk_size = "60G"
 
   iso_url      = "${var.input_dir}/ubuntu2404.qcow2"
   iso_checksum = "none"

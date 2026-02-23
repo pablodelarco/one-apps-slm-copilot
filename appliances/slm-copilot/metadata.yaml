@@ -2,9 +2,9 @@
 :app:
   :name: SLM-Copilot
   :type: image
-  :version: 1.0.0
+  :version: 2.0.0
   :publisher: OpenNebula Systems
-  :description: Sovereign AI coding assistant (Devstral Small 2 24B on CPU)
+  :description: Sovereign AI coding assistant (Devstral Small 2 24B on CPU via llama.cpp)
   :url: https://github.com/pablodelarco/one-apps-slm-copilot
   :tags:
     - ai
@@ -22,7 +22,7 @@
   :params:
     PASSWORD:
       :type: password
-      :description: API password for basic auth (auto-generated if empty)
+      :description: API key / Bearer token (auto-generated if empty)
     DOMAIN:
       :type: text
       :description: FQDN for Let's Encrypt certificate (self-signed if empty)
@@ -34,13 +34,17 @@
       :type: text
       :default: '0'
       :description: CPU threads for inference (0 = auto-detect)
+    MODEL:
+      :type: text
+      :default: 'devstral'
+      :description: Model name (default: devstral)
 
 :one:
   :version: 6.10, 7.0
   :template:
     :cpu: 16
     :memory: 32768
-    :disk: 51200
+    :disk: 61440
 
 :infra:
   :disk_format: qcow2

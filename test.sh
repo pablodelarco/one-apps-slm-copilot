@@ -4,10 +4,10 @@ set -euo pipefail
 # SLM-Copilot Post-Deployment Test
 # Validates a running instance with 7 checks.
 # Usage: ./test.sh <endpoint> <password>
+# Example: ./test.sh https://10.0.0.1:8443 myapikey
 
 ENDPOINT="${1:?Usage: $0 <endpoint> <password>}"
 PASSWORD="${2:?Usage: $0 <endpoint> <password>}"
-USERNAME="copilot"
 MODEL="devstral-small-2"
 TIMEOUT=120
 
@@ -42,10 +42,10 @@ else
 fi
 
 # Test 2: Health endpoint (no auth required)
-if curl -sk --max-time 10 "${ENDPOINT}/readyz" | grep -qi 'ok\|ready\|running'; then
-    report PASS "Health endpoint (/readyz)"
+if curl -sk --max-time 10 "${ENDPOINT}/health" | grep -qi 'ok\|status'; then
+    report PASS "Health endpoint (/health)"
 else
-    report FAIL "Health endpoint (/readyz)"
+    report FAIL "Health endpoint (/health)"
 fi
 
 # Test 3: Auth rejection (no credentials)
@@ -56,16 +56,16 @@ else
     report FAIL "Auth rejection (no credentials) -- got HTTP ${_code}"
 fi
 
-# Test 4: Auth acceptance (valid credentials)
-_code=$(curl -sk --max-time 10 -u "${USERNAME}:${PASSWORD}" -o /dev/null -w '%{http_code}' "${ENDPOINT}/v1/models")
+# Test 4: Auth acceptance (valid Bearer token)
+_code=$(curl -sk --max-time 10 -H "Authorization: Bearer ${PASSWORD}" -o /dev/null -w '%{http_code}' "${ENDPOINT}/v1/models")
 if [ "${_code}" = "200" ]; then
-    report PASS "Auth acceptance (valid credentials)"
+    report PASS "Auth acceptance (valid Bearer token)"
 else
-    report FAIL "Auth acceptance (valid credentials) -- got HTTP ${_code}"
+    report FAIL "Auth acceptance (valid Bearer token) -- got HTTP ${_code}"
 fi
 
 # Test 5: Model listing
-_models=$(curl -sk --max-time 10 -u "${USERNAME}:${PASSWORD}" "${ENDPOINT}/v1/models" 2>/dev/null)
+_models=$(curl -sk --max-time 10 -H "Authorization: Bearer ${PASSWORD}" "${ENDPOINT}/v1/models" 2>/dev/null)
 if echo "${_models}" | jq -e ".data[] | select(.id == \"${MODEL}\")" >/dev/null 2>&1; then
     report PASS "Model listing (${MODEL})"
 else
@@ -73,7 +73,7 @@ else
 fi
 
 # Test 6: Chat completion (non-streaming)
-_response=$(curl -sk --max-time "${TIMEOUT}" -u "${USERNAME}:${PASSWORD}" \
+_response=$(curl -sk --max-time "${TIMEOUT}" -H "Authorization: Bearer ${PASSWORD}" \
     -H 'Content-Type: application/json' \
     "${ENDPOINT}/v1/chat/completions" \
     -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one word\"}],\"max_tokens\":10}" 2>/dev/null) || true
@@ -84,7 +84,7 @@ else
 fi
 
 # Test 7: Streaming chat completion
-if curl -sk --max-time "${TIMEOUT}" -u "${USERNAME}:${PASSWORD}" \
+if curl -sk --max-time "${TIMEOUT}" -H "Authorization: Bearer ${PASSWORD}" \
     -H 'Content-Type: application/json' \
     "${ENDPOINT}/v1/chat/completions" \
     -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hi\"}],\"max_tokens\":5,\"stream\":true}" 2>/dev/null \

@@ -6,23 +6,18 @@ RSpec.describe 'SLM-Copilot Appliance' do
     @app.wait_until_ready(timeout: 600)
   end
 
-  it 'has Ollama service running' do
-    expect(@app.execute('systemctl is-active ollama').strip).to eq('active')
+  it 'has slm-copilot service running' do
+    expect(@app.execute('systemctl is-active slm-copilot').strip).to eq('active')
   end
 
-  it 'has Nginx service running' do
-    expect(@app.execute('systemctl is-active nginx').strip).to eq('active')
-  end
-
-  it 'serves HTTPS on port 443' do
-    result = @app.execute('curl -sk -o /dev/null -w "%{http_code}" https://localhost/')
+  it 'serves HTTPS on port 8443' do
+    result = @app.execute('curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/')
     expect(result.strip).to eq('401')
   end
 
-  it 'returns 200 on /readyz with auth' do
-    password = @app.execute('cat /var/lib/slm-copilot/password').strip
+  it 'returns 200 on /health without auth' do
     result = @app.execute(
-      "curl -sk -u copilot:#{password} -o /dev/null -w \"%{http_code}\" https://localhost/readyz"
+      'curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443/health'
     )
     expect(result.strip).to eq('200')
   end
@@ -30,7 +25,7 @@ RSpec.describe 'SLM-Copilot Appliance' do
   it 'lists the devstral-small-2 model' do
     password = @app.execute('cat /var/lib/slm-copilot/password').strip
     result = @app.execute(
-      "curl -sk -u copilot:#{password} https://localhost/v1/models"
+      "curl -sk -H 'Authorization: Bearer #{password}' https://localhost:8443/v1/models"
     )
     parsed = JSON.parse(result)
     model_ids = parsed['data'].map { |m| m['id'] }
@@ -40,7 +35,7 @@ RSpec.describe 'SLM-Copilot Appliance' do
   it 'completes a chat request' do
     password = @app.execute('cat /var/lib/slm-copilot/password').strip
     result = @app.execute(
-      'curl -sk -u copilot:' + password + ' https://localhost/v1/chat/completions ' \
+      'curl -sk -H "Authorization: Bearer ' + password + '" https://localhost:8443/v1/chat/completions ' \
       '-H "Content-Type: application/json" ' \
       '-d \'{"model":"devstral-small-2","messages":[{"role":"user","content":"Say hello"}],"max_tokens":5}\''
     )
@@ -52,7 +47,7 @@ RSpec.describe 'SLM-Copilot Appliance' do
   it 'has the report file with connection info' do
     result = @app.execute('cat /etc/one-appliance/config')
     expect(result).to include('endpoint')
-    expect(result).to include('api_password')
+    expect(result).to include('api_key')
     expect(result).to include('devstral-small-2')
   end
 end

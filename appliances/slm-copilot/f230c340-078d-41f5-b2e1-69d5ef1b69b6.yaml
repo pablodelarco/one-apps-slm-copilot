@@ -2,21 +2,21 @@
 #
 # After a successful build, update these PLACEHOLDER values:
 #   1. images[0].url          -- Replace PUBLISH_URL with actual hosting URL
-#   2. images[0].checksum.md5 -- From: md5sum build/export/slm-copilot-1.1.0.qcow2
-#   3. images[0].checksum.sha256 -- From: sha256sum build/export/slm-copilot-1.1.0.qcow2
-#   4. images[0].size         -- From: qemu-img info --output=json build/export/slm-copilot-1.1.0.qcow2 | jq '.["virtual-size"]'
+#   2. images[0].checksum.md5 -- From: md5sum build/export/slm-copilot-2.0.0.qcow2
+#   3. images[0].checksum.sha256 -- From: sha256sum build/export/slm-copilot-2.0.0.qcow2
+#   4. images[0].size         -- From: qemu-img info --output=json build/export/slm-copilot-2.0.0.qcow2 | jq '.["virtual-size"]'
 #   5. Rename this file to a UUID for marketplace PR: cp marketplace.yaml $(uuidgen).yaml
 #
 ---
-name: SLM-Copilot 1.1.0
-version: 1.1.0
+name: SLM-Copilot 2.0.0
+version: 2.0.0
 publisher: OpenNebula Systems
 description: |-
   One-click sovereign AI coding assistant powered by
   [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B, Mistral AI)
-  running on CPU via [Ollama](https://ollama.com/). Not all AI needs GPU --
-  this 24B parameter model delivers practical coding assistance on any 32 GB
-  VM with 16+ vCPUs. Import, instantiate, code.
+  running on CPU via [llama.cpp](https://github.com/ggerganov/llama.cpp). Not all
+  AI needs GPU -- this 24B parameter model delivers practical coding assistance on
+  any 32 GB VM with 16+ vCPUs. Import, instantiate, code.
 
   **European Sovereign AI** -- 100% open-source stack built by European
   companies: Mistral AI (Paris) for the model, OpenNebula (Madrid) for
@@ -31,14 +31,16 @@ description: |-
 
   **Features:**
   - OpenAI-compatible API (chat completions with streaming)
-  - HTTPS with auto-generated TLS certificate
+  - Native HTTPS with auto-generated TLS certificate (no reverse proxy needed)
   - Optional Let's Encrypt for production domains
-  - Basic authentication with auto-generated passwords
+  - Bearer token authentication with auto-generated API keys
+  - Built-in Prometheus metrics endpoint (/metrics)
+  - CPU-tuned inference (mlock, flash-attn, thread pinning, SIMD auto-detect)
   - Fully configurable via OpenNebula context variables
   - Report file with connection details and Cline setup guide
   - Idempotent reconfiguration on every boot
 short_description: >-
-  Sovereign AI coding copilot (Devstral Small 2 24B on CPU).
+  Sovereign AI coding copilot (Devstral Small 2 24B on CPU via llama.cpp).
   No GPU required. European open-source. One-click deployment.
 tags:
   - ai
@@ -47,7 +49,7 @@ tags:
   - copilot
   - sovereign
   - cpu
-  - ollama
+  - llama-cpp
   - devstral
   - cline
   - ubuntu
@@ -66,6 +68,7 @@ opennebula_template:
     ONEAPP_COPILOT_THREADS: '0'
     ONEAPP_COPILOT_PASSWORD: ''
     ONEAPP_COPILOT_DOMAIN: ''
+    ONEAPP_COPILOT_MODEL: 'devstral'
   CPU: '16'
   CPU_MODEL:
     MODEL: host-passthrough
@@ -80,11 +83,11 @@ opennebula_template:
 logo: slm-copilot.png
 images:
   - name: slm_copilot_os
-    url: 'https://PUBLISH_URL/slm-copilot-1.1.0.qcow2'
+    url: 'https://PUBLISH_URL/slm-copilot-2.0.0.qcow2'
     type: OS
     dev_prefix: vd
     driver: qcow2
-    size: 53687091200
+    size: PLACEHOLDER
     checksum:
-      md5: '56da88f6de24ce715172be9fae411ffd'
-      sha256: '266df8c7613b6cf643a0f319f6391510021601a581d6f3feb5897e1caf2c8cb5'
+      md5: PLACEHOLDER
+      sha256: PLACEHOLDER

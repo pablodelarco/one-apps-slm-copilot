@@ -4,42 +4,40 @@ One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNeb
 
 ## Overview
 
-SLM-Copilot is an OpenNebula marketplace appliance that deploys a fully sovereign AI coding assistant on any standard VM -- no GPU required. It packages [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B parameters, Q4\_K\_M quantization) served by [Ollama](https://ollama.com/) behind an Nginx reverse proxy with TLS encryption and basic authentication.
+SLM-Copilot is an OpenNebula marketplace appliance that deploys a fully sovereign AI coding assistant on any standard VM -- no GPU required. It packages [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B parameters, Q4\_K\_M quantization) served directly by [llama-server](https://github.com/ggerganov/llama.cpp) (llama.cpp) with native TLS encryption, Bearer token authentication, and Prometheus metrics.
 
 The key value proposition is sovereignty and simplicity: your code stays in your jurisdiction, your data never leaves your infrastructure, and you get a working AI coding copilot in minutes without any cloud API subscriptions or GPU hardware. Import the appliance from the OpenNebula marketplace, instantiate a VM with 32 GB RAM and 16 vCPUs, and connect from VS Code with the [Cline](https://cline.bot) extension.
 
-The entire stack is 100% open-source, built by European companies: Apache 2.0 for the Devstral model (Mistral AI, Paris), MIT for Ollama inference engine, BSD for Nginx reverse proxy, and Apache 2.0 for OpenNebula (Madrid) cloud platform and the one-apps appliance framework.
+The entire stack is 100% open-source, built by European companies: Apache 2.0 for the Devstral model (Mistral AI, Paris), MIT for llama.cpp inference engine, and Apache 2.0 for OpenNebula (Madrid) cloud platform and the one-apps appliance framework.
 
 ## Architecture
 
 ```
 Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
 +------------------+         +------------------------------------------+
-| VS Code + Cline  |  HTTPS  | Nginx (TLS + Basic Auth + CORS)  :443   |
+| VS Code + Cline  |  HTTPS  | llama-server (TLS + Bearer Auth)  :8443 |
 |  OpenAI Provider |-------->|   |                                      |
 +------------------+         |   v                                      |
-                             | Ollama (llama.cpp backend)      :11434   |
-                             |   |                                      |
-                             |   v                                      |
                              | Devstral Small 2 (24B Q4_K_M, ~14 GB)   |
+                             |                                          |
+                             | Built-in: CORS, Prometheus /metrics      |
                              +------------------------------------------+
 ```
 
-**Data flow:** Cline sends OpenAI-compatible API requests over HTTPS to port 443. Nginx terminates TLS (self-signed or Let's Encrypt), validates basic auth credentials, adds CORS headers, and proxies requests to Ollama on localhost:11434. Ollama loads the Devstral Small 2 model via its built-in llama.cpp engine and returns chat completions (streaming or non-streaming). All inference runs on CPU using the VM's available cores.
+**Data flow:** Cline sends OpenAI-compatible API requests over HTTPS to port 8443. llama-server handles TLS termination (self-signed or Let's Encrypt), validates the Bearer token, and returns chat completions (streaming or non-streaming). All inference runs on CPU using the VM's available cores. Built-in Prometheus metrics are available at `/metrics`.
 
 **Components:**
 
-- **Nginx** -- Reverse proxy handling TLS termination, HTTP basic authentication, CORS headers for browser-based clients, and SSE streaming passthrough. Listens on ports 80 (HTTPS redirect + ACME challenge) and 443 (API).
-- **Ollama** -- OpenAI-compatible inference server with built-in llama.cpp engine and AVX-512 optimization. Binds to 127.0.0.1:11434 (not exposed externally). Managed by systemd with environment overrides via drop-in config.
-- **Devstral Small 2** -- 24B parameter coding model by Mistral AI, quantized to Q4\_K\_M (~14 GB). Optimized for code analysis, refactoring, test generation, and bug fixes.
+- **llama-server** -- llama.cpp inference server with native TLS, API key authentication, CORS support, and Prometheus metrics. Compiled with GGML\_CPU\_ALL\_VARIANTS for automatic SIMD detection (SSE3/AVX/AVX2/AVX-512). Listens on port 8443.
+- **Devstral Small 2** -- 24B parameter coding model by Mistral AI, quantized to Q4\_K\_M (~14 GB GGUF). Optimized for code analysis, refactoring, test generation, and bug fixes.
 
 ## Quick Start
 
 ### Prerequisites
 
 - OpenNebula 6.10+ with KVM hypervisor
-- VM template: 32 GB RAM, 16 vCPU, 50 GB disk (minimum)
-- Network: port 443 open (and port 80 if using Let's Encrypt)
+- VM template: 32 GB RAM, 16 vCPU, 60 GB disk (minimum)
+- Network: port 8443 open (and port 80 if using Let's Encrypt)
 
 ### Steps
 
@@ -50,11 +48,11 @@ Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
    ```bash
    cat /etc/one-appliance/config
    ```
-   This shows the endpoint URL, password, model info, and Cline configuration.
+   This shows the endpoint URL, API key, model info, and Cline configuration.
 5. **Connect from VS Code** using the Cline extension (see [Cline Setup](#cline-setup-vs-code))
 6. **Validate** the deployment:
    ```bash
-   make test ENDPOINT=https://<vm-ip> PASSWORD=<password>
+   make test ENDPOINT=https://<vm-ip>:8443 PASSWORD=<password>
    ```
 
 ## Configuration (ONEAPP\_\* Variables)
@@ -63,10 +61,11 @@ All configuration is done via OpenNebula context variables, set when creating or
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ONEAPP_COPILOT_PASSWORD` | *(auto-generated)* | API password for basic auth. If empty, a random 16-character password is generated on first boot. Username is always `copilot`. |
+| `ONEAPP_COPILOT_PASSWORD` | *(auto-generated)* | API key (Bearer token). If empty, a random 16-character key is generated on first boot. |
 | `ONEAPP_COPILOT_DOMAIN` | *(empty)* | FQDN for Let's Encrypt certificate. If empty, a self-signed certificate is generated using the VM's IP address. |
 | `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window size (valid range: 512--131072). Larger values use more RAM for the KV cache. |
 | `ONEAPP_COPILOT_THREADS` | `0` *(auto-detect)* | CPU threads for inference. `0` means auto-detect all available cores. Set to the number of physical cores for best performance. |
+| `ONEAPP_COPILOT_MODEL` | `devstral` | Model name identifier (for future model selection). |
 
 **Context size and RAM:** The 24B Q4\_K\_M model uses approximately 14 GB of RAM. The remaining memory is used by the KV cache, which scales with context size. On a 32 GB VM, the default 32K context window leaves adequate headroom. Setting context size to 128K on a 32 GB VM may trigger the OOM killer -- use 64 GB RAM or higher for large context windows.
 
@@ -82,8 +81,8 @@ All variables are re-read on every VM boot (the appliance is fully reconfigurabl
 2. Open the Cline panel and click the **settings gear icon**
 3. Select **"OpenAI Compatible"** as the API Provider
 4. Enter the connection details from your VM's report file (`cat /etc/one-appliance/config`):
-   - **Base URL:** `https://<vm-ip>/v1`
-   - **API Key:** `<password>`
+   - **Base URL:** `https://<vm-ip>:8443/v1`
+   - **API Key:** `<api-key>`
    - **Model ID:** `devstral-small-2`
 
 ### JSON configuration snippet
@@ -93,13 +92,13 @@ For direct settings.json editing, add:
 ```json
 {
   "cline.apiProvider": "openai-compatible",
-  "cline.openAiCompatible.apiUrl": "https://<vm-ip>",
-  "cline.openAiCompatible.apiKey": "<password>",
+  "cline.openAiCompatible.apiUrl": "https://<vm-ip>:8443",
+  "cline.openAiCompatible.apiKey": "<api-key>",
   "cline.openAiCompatible.modelId": "devstral-small-2"
 }
 ```
 
-Replace `<vm-ip>` with the VM's IP address (or domain if `ONEAPP_COPILOT_DOMAIN` is set) and `<password>` with the API password from the report file.
+Replace `<vm-ip>` with the VM's IP address (or domain if `ONEAPP_COPILOT_DOMAIN` is set) and `<api-key>` with the API key from the report file.
 
 ### Notes on self-signed certificates
 
@@ -113,14 +112,14 @@ If using the default self-signed certificate (no `ONEAPP_COPILOT_DOMAIN` set), t
 - QEMU/KVM with `/dev/kvm` accessible
 - `cloud-localds` (from the `cloud-image-utils` package)
 - `qemu-img` (from the `qemu-utils` package)
-- ~50 GB free disk space
-- Internet access (downloads Ubuntu cloud image, one-apps framework, Ollama, and the model from Ollama registry)
+- ~60 GB free disk space
+- Internet access (downloads Ubuntu cloud image, one-apps framework, llama.cpp source, and the model GGUF from Hugging Face)
 
 ### Build
 
 ```bash
 git clone <repo-url>
-cd demo-ga
+cd one-apps-slm-copilot
 make build
 ```
 
@@ -132,18 +131,18 @@ The build wrapper (`build.sh`) orchestrates the following:
 2. Downloads the Ubuntu 24.04 cloud image if not already present
 3. Clones the [one-apps](https://github.com/OpenNebula/one-apps) framework if not already present
 4. Runs `packer init` and `packer build` (two-build pattern: cloud-init ISO generation + QEMU provisioning)
-5. The Packer QEMU build provisions the image with an 8-step sequence: SSH hardening, one-context install, one-apps framework, appliance script, context hooks, `service install` (installs Ollama + pulls model + pre-warms), and cleanup
+5. The Packer QEMU build provisions the image with an 8-step sequence: SSH hardening, one-context install, one-apps framework, appliance script, context hooks, `service install` (compiles llama-server + downloads model GGUF + pre-warms), and cleanup
 6. Compresses the output QCOW2 with `qemu-img convert -c`
 7. Generates SHA256 and MD5 checksums
 
 ### Build output
 
-- Image: `build/export/slm-copilot-1.1.0.qcow2` (~15-18 GB compressed)
-- Checksums: `build/export/slm-copilot-1.1.0.qcow2.sha256` and `.md5`
+- Image: `build/export/slm-copilot-2.0.0.qcow2` (~15-18 GB compressed)
+- Checksums: `build/export/slm-copilot-2.0.0.qcow2.sha256` and `.md5`
 
 ### Build time
 
-20-40 minutes depending on network speed (model download from Ollama registry) and CPU speed (model pre-warm inference test).
+20-40 minutes depending on network speed (model download from Hugging Face) and CPU speed (llama.cpp compilation + model pre-warm inference test).
 
 ### Makefile targets
 
@@ -179,8 +178,8 @@ Alternatively, install Ubuntu 24.04 Server from an ISO.
 
 **2. Create a VM with adequate resources**
 
-- 4 vCPU, 16 GB RAM, 50 GB disk (minimum for build)
-- The production VM needs 32 GB RAM and 16 vCPU; the build VM needs less because it only pre-warms briefly
+- 4 vCPU, 32 GB RAM, 60 GB disk (minimum for build -- needs RAM for compilation and model download)
+- The production VM needs 32 GB RAM and 16 vCPU
 
 **3. Boot the VM and SSH in as root**
 
@@ -248,13 +247,13 @@ chmod 0755 /etc/one-context.d/net.d/net-99-report-ready
 
 **10. Run service install**
 
-This is the longest step -- it installs Ollama, pulls the Devstral model from the Ollama registry, and pre-warms the model with a test inference.
+This is the longest step -- it compiles llama-server from source, downloads the Devstral GGUF from Hugging Face, and pre-warms the model with a test inference.
 
 ```bash
 /etc/one-appliance/service install
 ```
 
-Expected time: 15-30 minutes depending on network speed.
+Expected time: 15-30 minutes depending on CPU speed (compilation) and network speed (model download).
 
 **11. Cleanup for cloud reuse**
 
@@ -280,29 +279,29 @@ poweroff
 From the host, export and compress the disk image:
 
 ```bash
-qemu-img convert -c -O qcow2 /path/to/vm-disk.qcow2 slm-copilot-1.1.0.qcow2
-sha256sum slm-copilot-1.1.0.qcow2 > slm-copilot-1.1.0.qcow2.sha256
-md5sum slm-copilot-1.1.0.qcow2 > slm-copilot-1.1.0.qcow2.md5
+qemu-img convert -c -O qcow2 /path/to/vm-disk.qcow2 slm-copilot-2.0.0.qcow2
+sha256sum slm-copilot-2.0.0.qcow2 > slm-copilot-2.0.0.qcow2.sha256
+md5sum slm-copilot-2.0.0.qcow2 > slm-copilot-2.0.0.qcow2.md5
 ```
 
-The resulting `slm-copilot-1.1.0.qcow2` can be imported into OpenNebula as a marketplace image.
+The resulting `slm-copilot-2.0.0.qcow2` can be imported into OpenNebula as a marketplace image.
 
 ## Testing
 
 After deploying the appliance to a VM, validate the instance:
 
 ```bash
-make test ENDPOINT=https://<vm-ip> PASSWORD=<password>
+make test ENDPOINT=https://<vm-ip>:8443 PASSWORD=<api-key>
 ```
 
 The test script (`test.sh`) runs 7 checks:
 
 | # | Test | What it validates |
 |---|------|-------------------|
-| 1 | HTTPS connectivity | Port 443 responds (any HTTP status) |
-| 2 | Health endpoint | `/readyz` returns OK (no auth required) |
+| 1 | HTTPS connectivity | Port 8443 responds (any HTTP status) |
+| 2 | Health endpoint | `/health` returns OK (no auth required) |
 | 3 | Auth rejection | Request without credentials returns 401 |
-| 4 | Auth acceptance | Request with valid credentials returns 200 |
+| 4 | Auth acceptance | Request with valid Bearer token returns 200 |
 | 5 | Model listing | `/v1/models` contains `devstral-small-2` |
 | 6 | Chat completion | Non-streaming `/v1/chat/completions` returns valid JSON |
 | 7 | Streaming SSE | Streaming request returns `data:` lines |
@@ -312,12 +311,12 @@ Expected output:
 ```
 SLM-Copilot Post-Deployment Test
 =================================
-Endpoint: https://10.0.0.1
+Endpoint: https://10.0.0.1:8443
 
 [PASS] HTTPS connectivity
-[PASS] Health endpoint (/readyz)
+[PASS] Health endpoint (/health)
 [PASS] Auth rejection (no credentials)
-[PASS] Auth acceptance (valid credentials)
+[PASS] Auth acceptance (valid Bearer token)
 [PASS] Model listing (devstral-small-2)
 [PASS] Chat completion (non-streaming)
 [PASS] Chat completion (streaming SSE)
@@ -332,8 +331,8 @@ All requests use `curl -sk` (self-signed certificate compatibility). Chat comple
 ### Service not starting after boot
 
 ```bash
-systemctl status ollama
-journalctl -u ollama -f
+systemctl status slm-copilot
+journalctl -u slm-copilot -f
 ```
 
 Check that the VM has at least 32 GB RAM. The model requires ~14 GB just for loading, plus KV cache overhead.
@@ -346,13 +345,14 @@ CPU inference with a 24B model is expected to be 5-15 tokens/second depending on
 - Reduce context size (`ONEAPP_COPILOT_CONTEXT_SIZE`) to lower KV cache memory pressure
 - Ensure the CPU supports AVX2 (check `grep avx2 /proc/cpuinfo`); AVX-512 provides further improvement
 - Set `ONEAPP_COPILOT_THREADS` to the number of physical cores (auto-detect may overcount with hyperthreading)
+- llama-server is compiled with GGML\_CPU\_ALL\_VARIANTS, automatically selecting the best SIMD variant
 
 ### Let's Encrypt failed
 
 This is a warning, not an error -- the appliance falls back to self-signed certificates automatically. Check:
 
 - DNS resolves `ONEAPP_COPILOT_DOMAIN` to the VM's public IP
-- Port 80 is reachable from the internet (ACME HTTP-01 challenge)
+- Port 80 is reachable from the internet (ACME HTTP-01 challenge via certbot standalone)
 - The domain is correct (no typos, includes subdomain if applicable)
 
 ### Out of memory
@@ -362,14 +362,14 @@ The 24B Q4\_K\_M model needs approximately 14 GB of RAM. The KV cache scales wit
 - 32K context (default): ~14 GB model + ~2 GB KV cache = ~16 GB total (safe)
 - 128K context: ~14 GB model + ~8 GB KV cache = ~22 GB total (tight)
 
-Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates Ollama.
+Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates llama-server.
 
 ### Cline cannot connect
 
-1. Verify HTTPS is working: `curl -k https://<vm-ip>/readyz`
-2. Check the password: SSH into the VM and run `cat /etc/one-appliance/config`
-3. Verify firewall allows port 443
-4. Ensure the API URL in Cline includes `/v1` (e.g., `https://<vm-ip>/v1`)
+1. Verify HTTPS is working: `curl -k https://<vm-ip>:8443/health`
+2. Check the API key: SSH into the VM and run `cat /etc/one-appliance/config`
+3. Verify firewall allows port 8443
+4. Ensure the API URL in Cline includes `/v1` (e.g., `https://<vm-ip>:8443/v1`)
 5. Check Cline logs in VS Code: Output panel > select "Cline" from the dropdown
 
 ### Log locations
@@ -377,8 +377,7 @@ Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates Ollama.
 | Log | Location |
 |-----|----------|
 | Application log | `/var/log/one-appliance/slm-copilot.log` |
-| Ollama service | `journalctl -u ollama` |
-| Nginx access/error | `journalctl -u nginx` |
+| Inference server | `journalctl -u slm-copilot` |
 | Report file | `/etc/one-appliance/config` |
 
 ## Performance
@@ -395,7 +394,7 @@ Expected inference performance with Devstral Small 2 (24B Q4\_K\_M):
 
 - Speeds are approximate and depend on CPU architecture, memory bandwidth, and prompt complexity
 - AVX-512 support significantly improves inference speed (20-40% over AVX2-only CPUs)
-- Ollama ships with AVX-512 optimized binaries, providing ~2x speedup over generic builds
+- llama-server is compiled with GGML\_CPU\_ALL\_VARIANTS for automatic SIMD selection, providing the best available performance
 - Context size affects memory usage -- larger context windows require more RAM for the KV cache
 - First request after boot is slower due to model loading and initial memory allocation
 - The model is pre-warmed during image build, so cold-start on deployment is just memory mapping (~30-60 seconds)
@@ -426,8 +425,7 @@ The SLM-Copilot appliance is licensed under the Apache License 2.0.
 | Component | License | Maintainer |
 |-----------|---------|------------|
 | Devstral Small 2 | Apache 2.0 | Mistral AI (Paris) |
-| Ollama | MIT | Ollama Inc. |
-| Nginx | BSD-2-Clause | Nginx Inc. |
+| llama.cpp | MIT | ggerganov |
 | OpenNebula one-apps | Apache 2.0 | OpenNebula Systems (Madrid) |
 
 ## Author
