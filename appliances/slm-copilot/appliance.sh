@@ -229,8 +229,7 @@ ExecStart=/usr/local/bin/llama-server \
   --prio 2 \
   --ssl-key-file ${LLAMA_SSL_KEY} \
   --ssl-cert-file ${LLAMA_SSL_CERT} \
-  --api-key ${LLAMA_API_KEY} \
-  --chat-template chatml
+  --api-key ${LLAMA_API_KEY}
 Restart=on-failure
 RestartSec=5
 LimitMEMLOCK=infinity
