@@ -15,7 +15,7 @@ Your code never leaves your infrastructure. Deploy a private AI coding copilot o
 
 ```bash
 # 1. Import the appliance from the OpenNebula marketplace (Storage > Apps > "SLM-Copilot")
-# 2. Create a VM: 32 GB RAM, 16 vCPUs minimum
+# 2. Create a VM: 32 GB RAM, 16 vCPUs, CPU model = host-passthrough
 # 3. Boot and wait ~2 min, then SSH in:
 cat /etc/one-appliance/config   # shows your API endpoint and API key
 ```
@@ -50,7 +50,8 @@ Set these in the VM template before booting (all optional, re-read on every rebo
 | Problem | Check |
 |---------|-------|
 | Service won't start | VM needs at least 32 GB RAM |
-| Slow inference | Add more vCPUs; CPU must support AVX2 |
+| Slow inference | Add more vCPUs; CPU must support AVX2. Set CPU model to `host-passthrough` in the VM template |
+| Inference hangs | VM CPU model must be `host-passthrough` (not `qemu64`). Without it, AVX2/AVX-512 instructions are not exposed to the guest |
 | Let's Encrypt fails | DNS must resolve and port 80 must be reachable |
 | Client can't connect | Port 8443 open? Test: `curl -k https://<vm-ip>:8443/health` |
 

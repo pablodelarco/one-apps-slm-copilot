@@ -36,8 +36,10 @@ Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
 ### Prerequisites
 
 - OpenNebula 6.10+ with KVM hypervisor
-- VM template: 32 GB RAM, 16 vCPU, 60 GB disk (minimum)
+- VM template: 32 GB RAM, 16 vCPU, 60 GB disk (minimum), **CPU model: `host-passthrough`**
 - Network: port 8443 open (and port 80 if using Let's Encrypt)
+
+> **Important:** The VM template must use `host-passthrough` CPU model so that AVX2/AVX-512 instructions are exposed to the guest. Without this, llama.cpp inference will hang. The marketplace template includes this setting automatically.
 
 ### Steps
 
@@ -343,9 +345,24 @@ CPU inference with a 24B model is expected to be 5-15 tokens/second depending on
 
 - Increase the number of vCPUs assigned to the VM
 - Reduce context size (`ONEAPP_COPILOT_CONTEXT_SIZE`) to lower KV cache memory pressure
-- Ensure the CPU supports AVX2 (check `grep avx2 /proc/cpuinfo`); AVX-512 provides further improvement
+- Ensure the VM template uses `host-passthrough` CPU model (exposes host AVX2/AVX-512 to the guest)
+- Check inside the VM: `grep avx2 /proc/cpuinfo` (if empty, the CPU model is wrong)
 - Set `ONEAPP_COPILOT_THREADS` to the number of physical cores (auto-detect may overcount with hyperthreading)
 - llama-server is compiled with GGML\_CPU\_ALL\_VARIANTS, automatically selecting the best SIMD variant
+
+### Inference hangs (requests never return)
+
+The most common cause is the VM running with the default `qemu64` CPU model, which only exposes SSE2 instructions. llama.cpp needs AVX2 or higher for functional inference.
+
+**Fix:** Set the CPU model to `host-passthrough` in the VM template:
+
+```
+CPU_MODEL = [ MODEL = "host-passthrough" ]
+```
+
+Or in Sunstone: VM Template > OS & CPU > CPU Model > `host-passthrough`.
+
+Verify inside the VM: `grep avx2 /proc/cpuinfo` should return results. If empty, the CPU model is not configured correctly.
 
 ### Let's Encrypt failed
 

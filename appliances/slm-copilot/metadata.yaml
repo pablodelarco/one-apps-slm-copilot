@@ -45,6 +45,7 @@
     :cpu: 16
     :memory: 32768
     :disk: 61440
+    :cpu_model: host-passthrough
 
 :infra:
   :disk_format: qcow2
