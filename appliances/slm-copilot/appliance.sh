@@ -275,7 +275,7 @@ UNIT_EOF
 _vm_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 _password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'see report')
 _llama=$(systemctl is-active slm-copilot 2>/dev/null || echo 'unknown')
-_model=$(basename "$(grep '^LLAMA_MODEL=' /etc/slm-copilot/env 2>/dev/null | cut -d= -f2-)" .gguf 2>/dev/null || echo 'unknown')
+_model=$(cat /var/lib/slm-copilot/model_id 2>/dev/null || echo 'unknown')
 printf '\n'
 printf '  SLM-Copilot -- Sovereign AI Coding Assistant\n'
 printf '  =============================================\n'
