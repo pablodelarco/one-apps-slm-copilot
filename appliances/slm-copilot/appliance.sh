@@ -31,7 +31,7 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)' '0'
     'ONEAPP_COPILOT_PASSWORD'      'configure' 'API password (auto-generated if empty)'      ''
     'ONEAPP_COPILOT_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
-    'ONEAPP_COPILOT_MODEL'         'configure' 'Model: devstral (built-in) or GGUF URL'       'devstral'
+    'ONEAPP_COPILOT_MODEL'         'configure' 'AI model selection'       'Devstral Small 24B (built-in)'
 )
 
 # --------------------------------------------------------------------------
@@ -41,7 +41,7 @@ ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-32768}"
 ONEAPP_COPILOT_THREADS="${ONEAPP_COPILOT_THREADS:-0}"
 ONEAPP_COPILOT_PASSWORD="${ONEAPP_COPILOT_PASSWORD:-}"
 ONEAPP_COPILOT_DOMAIN="${ONEAPP_COPILOT_DOMAIN:-}"
-ONEAPP_COPILOT_MODEL="${ONEAPP_COPILOT_MODEL:-devstral}"
+ONEAPP_COPILOT_MODEL="${ONEAPP_COPILOT_MODEL:-Devstral Small 24B (built-in)}"
 
 # --------------------------------------------------------------------------
 # Constants
@@ -56,9 +56,20 @@ readonly LLAMA_SYSTEMD_UNIT="/etc/systemd/system/slm-copilot.service"
 readonly LLAMA_ENV_FILE="/etc/slm-copilot/env"
 readonly COPILOT_LOG="/var/log/one-appliance/slm-copilot.log"
 
-# Model GGUF filename (Devstral Small 2 24B Instruct Q4_K_M)
-readonly MODEL_GGUF="Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
-readonly MODEL_HF_REPO="unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF"
+# Built-in model (baked into image at install time)
+readonly BUILTIN_MODEL_GGUF="Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
+readonly BUILTIN_MODEL_HF_REPO="unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF"
+
+# ---------------------------------------------------------------------------
+# Model catalog: name -> "model_id|gguf_filename|hf_url"
+# The first entry (Devstral) is baked into the image at build time.
+# Others are downloaded on first boot when selected.
+# ---------------------------------------------------------------------------
+declare -A MODEL_CATALOG=(
+    ["Devstral Small 24B (built-in)"]="devstral-small-2|${BUILTIN_MODEL_GGUF}|"
+    ["Qwen2.5-Coder 7B"]="qwen2.5-coder-7b|Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf|https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
+    ["Codestral Mamba 7B"]="codestral-mamba-7b|codestral-mamba-7B-v0.1-Q4_K_M.gguf|https://huggingface.co/bartowski/Codestral-Mamba-7B-v0.1-GGUF/resolve/main/Codestral-Mamba-7B-v0.1-Q4_K_M.gguf"
+)
 
 # ==========================================================================
 #  LOGGING: dedicated application log helpers
@@ -201,10 +212,10 @@ service_install() {
 
     # 4. Download Devstral Q4_K_M GGUF from Hugging Face
     mkdir -p "${LLAMA_MODEL_DIR}"
-    local _model_url="https://huggingface.co/${MODEL_HF_REPO}/resolve/main/${MODEL_GGUF}"
-    log_copilot info "Downloading ${MODEL_GGUF} from Hugging Face (approx 14 GB)"
-    curl -fSL --progress-bar -o "${LLAMA_MODEL_DIR}/${MODEL_GGUF}" "${_model_url}"
-    log_copilot info "Model downloaded to ${LLAMA_MODEL_DIR}/${MODEL_GGUF}"
+    local _model_url="https://huggingface.co/${BUILTIN_MODEL_HF_REPO}/resolve/main/${BUILTIN_MODEL_GGUF}"
+    log_copilot info "Downloading ${BUILTIN_MODEL_GGUF} from Hugging Face (approx 14 GB)"
+    curl -fSL --progress-bar -o "${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}" "${_model_url}"
+    log_copilot info "Model downloaded to ${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}"
 
     # 5. Create systemd unit file
     mkdir -p /etc/slm-copilot
@@ -241,7 +252,7 @@ UNIT_EOF
 
     # 6. Verify model file integrity (check file size is reasonable)
     local _model_size
-    _model_size=$(stat -c%s "${LLAMA_MODEL_DIR}/${MODEL_GGUF}" 2>/dev/null || echo 0)
+    _model_size=$(stat -c%s "${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}" 2>/dev/null || echo 0)
     if [ "${_model_size}" -lt 1000000000 ]; then
         log_copilot error "Model file too small (${_model_size} bytes) -- download may be corrupted"
         exit 1
@@ -420,66 +431,55 @@ ACTIVE_MODEL_PATH=""
 ACTIVE_MODEL_ID=""
 
 resolve_model() {
-    local _model="${ONEAPP_COPILOT_MODEL:-devstral}"
+    local _selection="${ONEAPP_COPILOT_MODEL:-Devstral Small 24B (built-in)}"
 
-    if [ "${_model}" = "devstral" ]; then
-        # Built-in model (baked into image at install time)
-        ACTIVE_MODEL_PATH="${LLAMA_MODEL_DIR}/${MODEL_GGUF}"
-        ACTIVE_MODEL_ID="devstral-small-2"
-        log_copilot info "Using built-in model: ${ACTIVE_MODEL_ID}"
+    # Look up the selection in the catalog
+    local _entry="${MODEL_CATALOG[${_selection}]:-}"
 
-        if [ ! -f "${ACTIVE_MODEL_PATH}" ]; then
-            log_copilot error "Built-in model not found at ${ACTIVE_MODEL_PATH}"
-            exit 1
-        fi
-        _persist_model_info
-        return 0
+    if [ -z "${_entry}" ]; then
+        log_copilot error "Unknown model '${_selection}'. Available: ${!MODEL_CATALOG[*]}"
+        exit 1
     fi
 
-    # Treat as a direct GGUF download URL
-    if [[ "${_model}" =~ ^https?:// ]]; then
-        local _filename
-        _filename=$(basename "${_model}" | sed 's/[?#].*//')
+    # Parse catalog entry: "model_id|gguf_filename|hf_url"
+    ACTIVE_MODEL_ID=$(echo "${_entry}" | cut -d'|' -f1)
+    local _gguf_file
+    _gguf_file=$(echo "${_entry}" | cut -d'|' -f2)
+    local _hf_url
+    _hf_url=$(echo "${_entry}" | cut -d'|' -f3)
 
-        # Validate filename looks like a GGUF
-        if [[ ! "${_filename}" =~ \.gguf$ ]]; then
-            log_copilot error "ONEAPP_COPILOT_MODEL URL must point to a .gguf file (got: ${_filename})"
-            exit 1
-        fi
+    ACTIVE_MODEL_PATH="${LLAMA_MODEL_DIR}/${_gguf_file}"
 
-        ACTIVE_MODEL_PATH="${LLAMA_MODEL_DIR}/${_filename}"
-        # Derive model ID from filename (strip extension and quant suffix)
-        ACTIVE_MODEL_ID=$(echo "${_filename}" | sed 's/\.gguf$//; s/-Q[0-9].*$//' | tr '[:upper:]' '[:lower:]')
-
-        # Skip download if file already exists and is non-trivial size
-        if [ -f "${ACTIVE_MODEL_PATH}" ]; then
-            local _size
-            _size=$(stat -c%s "${ACTIVE_MODEL_PATH}" 2>/dev/null || echo 0)
-            if [ "${_size}" -gt 1000000000 ]; then
-                log_copilot info "Custom model already downloaded: ${_filename} ($(( _size / 1073741824 )) GB)"
-                _persist_model_info
-                return 0
-            fi
-            log_copilot warning "Existing file too small, re-downloading: ${_filename}"
-        fi
-
-        log_copilot info "Downloading custom model: ${_model}"
-        mkdir -p "${LLAMA_MODEL_DIR}"
-        if ! curl -fSL --progress-bar -o "${ACTIVE_MODEL_PATH}" "${_model}"; then
-            log_copilot error "Failed to download model from ${_model}"
-            rm -f "${ACTIVE_MODEL_PATH}"
-            exit 1
-        fi
-
+    # Check if model file already exists on disk (built-in or previously downloaded)
+    if [ -f "${ACTIVE_MODEL_PATH}" ]; then
         local _size
         _size=$(stat -c%s "${ACTIVE_MODEL_PATH}" 2>/dev/null || echo 0)
-        log_copilot info "Custom model downloaded: ${_filename} ($(( _size / 1073741824 )) GB)"
-        _persist_model_info
-        return 0
+        if [ "${_size}" -gt 1000000000 ]; then
+            log_copilot info "Model ready: ${ACTIVE_MODEL_ID} ($(( _size / 1073741824 )) GB)"
+            _persist_model_info
+            return 0
+        fi
+        log_copilot warning "Model file incomplete, re-downloading: ${_gguf_file}"
     fi
 
-    log_copilot error "ONEAPP_COPILOT_MODEL='${_model}' -- must be 'devstral' or a direct GGUF URL (https://.../*.gguf)"
-    exit 1
+    # No local file: download from HuggingFace
+    if [ -z "${_hf_url}" ]; then
+        log_copilot error "Built-in model file missing at ${ACTIVE_MODEL_PATH}"
+        exit 1
+    fi
+
+    log_copilot info "Downloading ${ACTIVE_MODEL_ID} from HuggingFace..."
+    mkdir -p "${LLAMA_MODEL_DIR}"
+    if ! curl -fSL --progress-bar -o "${ACTIVE_MODEL_PATH}" "${_hf_url}"; then
+        log_copilot error "Failed to download model from ${_hf_url}"
+        rm -f "${ACTIVE_MODEL_PATH}"
+        exit 1
+    fi
+
+    local _size
+    _size=$(stat -c%s "${ACTIVE_MODEL_PATH}" 2>/dev/null || echo 0)
+    log_copilot info "Model downloaded: ${ACTIVE_MODEL_ID} ($(( _size / 1073741824 )) GB)"
+    _persist_model_info
 }
 
 # Persist resolved model path/ID so service_bootstrap can read them
