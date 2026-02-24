@@ -83,6 +83,7 @@ opennebula_template:
   inputs_order: >-
     ONEAPP_COPILOT_MODEL,
     ONEAPP_COPILOT_CONTEXT_SIZE,
+    ONEAPP_COPILOT_THREADS,
     ONEAPP_COPILOT_PASSWORD,
     ONEAPP_COPILOT_DOMAIN
   user_inputs:
@@ -91,6 +92,8 @@ opennebula_template:
       12B,Codestral Mamba 7B,Mistral 7B|Devstral Small 24B (built-in)
     oneapp_copilot_context_size: >-
       O|list|Context Window (tokens)|8192,16384,32768|32768
+    oneapp_copilot_threads: >-
+      O|text|CPU Threads for inference (0 = auto-detect)|0
     oneapp_copilot_password: >-
       O|password|API Key (empty = auto-generate)||
     oneapp_copilot_domain: >-
