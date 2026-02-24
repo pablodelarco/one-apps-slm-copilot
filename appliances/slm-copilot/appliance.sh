@@ -69,7 +69,6 @@ declare -A MODEL_CATALOG=(
     ["Devstral Small 24B (built-in)"]="devstral-small-2|${BUILTIN_MODEL_GGUF}|"
     ["Codestral 22B"]="codestral-22b|Codestral-22B-v0.1-Q4_K_M.gguf|https://huggingface.co/bartowski/Codestral-22B-v0.1-GGUF/resolve/main/Codestral-22B-v0.1-Q4_K_M.gguf"
     ["Mistral Nemo 12B"]="mistral-nemo-12b|Mistral-Nemo-Instruct-2407-Q4_K_M.gguf|https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf"
-    ["Qwen2.5-Coder 7B"]="qwen2.5-coder-7b|Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf|https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
     ["Codestral Mamba 7B"]="codestral-mamba-7b|codestral-mamba-7B-v0.1-Q4_K_M.gguf|https://huggingface.co/bartowski/Codestral-Mamba-7B-v0.1-GGUF/resolve/main/Codestral-Mamba-7B-v0.1-Q4_K_M.gguf"
     ["Mistral 7B"]="mistral-7b|Mistral-7B-Instruct-v0.3-Q4_K_M.gguf|https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
 )
@@ -383,7 +382,7 @@ for Cline/VS Code. Native TLS, Bearer token auth, Prometheus metrics.
 Configuration variables (set via OpenNebula context):
   ONEAPP_COPILOT_MODEL          AI model from catalog (default: Devstral Small 24B)
                                 Available: Devstral 24B, Codestral 22B, Mistral Nemo 12B,
-                                Qwen2.5-Coder 7B, Codestral Mamba 7B, Mistral 7B
+                                Codestral Mamba 7B, Mistral 7B
   ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
                                 Valid range: 512-131072 tokens
   ONEAPP_COPILOT_PASSWORD        API key / Bearer token (auto-generated 16-char if empty)
