@@ -63,19 +63,23 @@ All configuration is done via OpenNebula context variables, set when creating or
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ONEAPP_COPILOT_PASSWORD` | *(auto-generated)* | API key (Bearer token). If empty, a random 16-character key is generated on first boot. |
-| `ONEAPP_COPILOT_DOMAIN` | *(empty)* | FQDN for Let's Encrypt certificate. If empty, a self-signed certificate is generated using the VM's IP address. |
-| `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window size (valid range: 512--131072). Larger values use more RAM for the KV cache. |
-| `ONEAPP_COPILOT_THREADS` | `0` *(auto-detect)* | CPU threads for inference. `0` means auto-detect all available cores. Set to the number of physical cores for best performance. |
-| `ONEAPP_COPILOT_MODEL` | `devstral` | `devstral` uses the built-in Devstral Small 2 GGUF. To use a different model, paste a direct GGUF download URL (see below). |
+| `ONEAPP_COPILOT_AI_MODEL` | `Devstral Small 24B (built-in)` | AI model selection from the built-in catalog (Devstral 24B, Codestral 22B, Mistral Nemo 12B, Codestral Mamba 7B, Mistral 7B). |
+| `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window size (8192, 16384, or 32768). Larger values use more RAM for the KV cache. |
+| `ONEAPP_COPILOT_CPU_THREADS` | `0` *(auto-detect)* | CPU threads for inference. `0` means auto-detect all available cores. Set to the number of physical cores for best performance. |
+| `ONEAPP_COPILOT_API_PASSWORD` | *(auto-generated)* | API key (Bearer token). If empty, a random 16-character key is generated on first boot. |
+| `ONEAPP_COPILOT_TLS_DOMAIN` | *(empty)* | FQDN for Let's Encrypt certificate. If empty, a self-signed certificate is generated using the VM's IP address. |
 
-**Custom model via URL:** Set `ONEAPP_COPILOT_MODEL` to a HuggingFace GGUF URL to use a different model. The appliance downloads it on first boot (subsequent boots skip the download if the file exists). Example:
+**Model catalog:** Select a model from the Sunstone wizard dropdown. The default Devstral Small 24B is baked into the image; other models are downloaded from Hugging Face on first boot (subsequent boots reuse the cached download). Available models:
 
-```
-https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
-```
+| Model | Size (Q4\_K\_M) | RAM Usage | Best For |
+|-------|-----------------|-----------|----------|
+| Devstral Small 24B (built-in) | 14.3 GB | ~16 GB | Coding (Mistral, latest) |
+| Codestral 22B | 13.3 GB | ~15 GB | Coding (Mistral flagship) |
+| Mistral Nemo 12B | 7.5 GB | ~10 GB | Reasoning + coding |
+| Codestral Mamba 7B | 4.0 GB | ~6 GB | Coding (SSM architecture) |
+| Mistral 7B | 4.4 GB | ~6 GB | General purpose |
 
-The built-in Devstral remains on disk and is used again if you switch back to `devstral`.
+The built-in Devstral remains on disk and is used again if you switch back.
 
 **Context size and RAM:** The 24B Q4\_K\_M model uses approximately 14 GB of RAM. The remaining memory is used by the KV cache, which scales with context size. On a 32 GB VM, the default 32K context window leaves adequate headroom. Setting context size to 128K on a 32 GB VM may trigger the OOM killer -- use 64 GB RAM or higher for large context windows.
 
@@ -108,11 +112,11 @@ For direct settings.json editing, add:
 }
 ```
 
-Replace `<vm-ip>` with the VM's IP address (or domain if `ONEAPP_COPILOT_DOMAIN` is set) and `<api-key>` with the API key from the report file.
+Replace `<vm-ip>` with the VM's IP address (or domain if `ONEAPP_COPILOT_TLS_DOMAIN` is set) and `<api-key>` with the API key from the report file.
 
 ### Notes on self-signed certificates
 
-If using the default self-signed certificate (no `ONEAPP_COPILOT_DOMAIN` set), the Cline extension should work without issues as it typically does not verify TLS certificates for custom endpoints. If you encounter connection errors, the report file on the VM (`cat /etc/one-appliance/config`) provides the exact configuration values and a curl test command for debugging.
+If using the default self-signed certificate (no `ONEAPP_COPILOT_TLS_DOMAIN` set), the Cline extension should work without issues as it typically does not verify TLS certificates for custom endpoints. If you encounter connection errors, the report file on the VM (`cat /etc/one-appliance/config`) provides the exact configuration values and a curl test command for debugging.
 
 ## Building from Source
 
@@ -355,7 +359,7 @@ CPU inference with a 24B model is expected to be 5-15 tokens/second depending on
 - Reduce context size (`ONEAPP_COPILOT_CONTEXT_SIZE`) to lower KV cache memory pressure
 - Ensure the VM template uses `host-passthrough` CPU model (exposes host AVX2/AVX-512 to the guest)
 - Check inside the VM: `grep avx2 /proc/cpuinfo` (if empty, the CPU model is wrong)
-- Set `ONEAPP_COPILOT_THREADS` to the number of physical cores (auto-detect may overcount with hyperthreading)
+- Set `ONEAPP_COPILOT_CPU_THREADS` to the number of physical cores (auto-detect may overcount with hyperthreading)
 - llama-server is compiled with GGML\_CPU\_ALL\_VARIANTS, automatically selecting the best SIMD variant
 
 ### Inference hangs (requests never return)
@@ -376,7 +380,7 @@ Verify inside the VM: `grep avx2 /proc/cpuinfo` should return results. If empty,
 
 This is a warning, not an error -- the appliance falls back to self-signed certificates automatically. Check:
 
-- DNS resolves `ONEAPP_COPILOT_DOMAIN` to the VM's public IP
+- DNS resolves `ONEAPP_COPILOT_TLS_DOMAIN` to the VM's public IP
 - Port 80 is reachable from the internet (ACME HTTP-01 challenge via certbot standalone)
 - The domain is correct (no typos, includes subdomain if applicable)
 

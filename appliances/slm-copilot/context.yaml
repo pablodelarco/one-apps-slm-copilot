@@ -5,6 +5,8 @@
   :microenvs:
     - name: default
       context:
+        ONEAPP_COPILOT_AI_MODEL: 'Devstral Small 24B (built-in)'
         ONEAPP_COPILOT_CONTEXT_SIZE: '32768'
-        ONEAPP_COPILOT_THREADS: '0'
-        ONEAPP_COPILOT_MODEL: 'devstral'
+        ONEAPP_COPILOT_CPU_THREADS: '0'
+        ONEAPP_COPILOT_API_PASSWORD: ''
+        ONEAPP_COPILOT_TLS_DOMAIN: ''

@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- ONEAPP_COPILOT_MODEL context variable for future model selection
+- ONEAPP_COPILOT_AI_MODEL context variable for model selection from catalog
 - Built-in Prometheus metrics endpoint (/metrics)
 - Native health endpoint (/health)
 
@@ -62,6 +62,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Basic authentication with auto-generated or user-supplied password
 - Report file with connection details and Cline VS Code setup guide
 - SSH login banner with service status
-- Configurable context variables: ONEAPP_COPILOT_CONTEXT_SIZE, ONEAPP_COPILOT_THREADS, ONEAPP_COPILOT_PASSWORD, ONEAPP_COPILOT_DOMAIN
+- Configurable context variables: ONEAPP_COPILOT_AI_MODEL, ONEAPP_COPILOT_CONTEXT_SIZE, ONEAPP_COPILOT_CPU_THREADS, ONEAPP_COPILOT_API_PASSWORD, ONEAPP_COPILOT_TLS_DOMAIN
 - Build-time model pre-warming with smoke tests
 - Packer HCL2 build pipeline with cloud-init bootstrap
