@@ -27,21 +27,21 @@ ONE_SERVICE_RECONFIGURABLE=true
 # every VM boot / reconfigure cycle.
 # --------------------------------------------------------------------------
 ONE_SERVICE_PARAMS=(
-    'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'          '32768'
-    'ONEAPP_COPILOT_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)' '0'
-    'ONEAPP_COPILOT_PASSWORD'      'configure' 'API password (auto-generated if empty)'      ''
+    'ONEAPP_COPILOT_MODEL'         'configure' 'AI model selection'                          'Devstral Small 24B (built-in)'
+    'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'              '32768'
+    'ONEAPP_COPILOT_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
     'ONEAPP_COPILOT_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
-    'ONEAPP_COPILOT_MODEL'         'configure' 'AI model selection'       'Devstral Small 24B (built-in)'
+    'ONEAPP_COPILOT_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
 )
 
 # --------------------------------------------------------------------------
 # Default value assignments
 # --------------------------------------------------------------------------
+ONEAPP_COPILOT_MODEL="${ONEAPP_COPILOT_MODEL:-Devstral Small 24B (built-in)}"
 ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-32768}"
-ONEAPP_COPILOT_THREADS="${ONEAPP_COPILOT_THREADS:-0}"
 ONEAPP_COPILOT_PASSWORD="${ONEAPP_COPILOT_PASSWORD:-}"
 ONEAPP_COPILOT_DOMAIN="${ONEAPP_COPILOT_DOMAIN:-}"
-ONEAPP_COPILOT_MODEL="${ONEAPP_COPILOT_MODEL:-Devstral Small 24B (built-in)}"
+ONEAPP_COPILOT_THREADS="${ONEAPP_COPILOT_THREADS:-0}"
 
 # --------------------------------------------------------------------------
 # Constants
@@ -67,8 +67,11 @@ readonly BUILTIN_MODEL_HF_REPO="unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF"
 # ---------------------------------------------------------------------------
 declare -A MODEL_CATALOG=(
     ["Devstral Small 24B (built-in)"]="devstral-small-2|${BUILTIN_MODEL_GGUF}|"
+    ["Codestral 22B"]="codestral-22b|Codestral-22B-v0.1-Q4_K_M.gguf|https://huggingface.co/bartowski/Codestral-22B-v0.1-GGUF/resolve/main/Codestral-22B-v0.1-Q4_K_M.gguf"
+    ["Mistral Nemo 12B"]="mistral-nemo-12b|Mistral-Nemo-Instruct-2407-Q4_K_M.gguf|https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf"
     ["Qwen2.5-Coder 7B"]="qwen2.5-coder-7b|Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf|https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
     ["Codestral Mamba 7B"]="codestral-mamba-7b|codestral-mamba-7B-v0.1-Q4_K_M.gguf|https://huggingface.co/bartowski/Codestral-Mamba-7B-v0.1-GGUF/resolve/main/Codestral-Mamba-7B-v0.1-Q4_K_M.gguf"
+    ["Mistral 7B"]="mistral-7b|Mistral-7B-Instruct-v0.3-Q4_K_M.gguf|https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
 )
 
 # ==========================================================================
@@ -378,15 +381,16 @@ Devstral Small 2 24B (Q4_K_M quantization) on CPU. OpenAI-compatible API
 for Cline/VS Code. Native TLS, Bearer token auth, Prometheus metrics.
 
 Configuration variables (set via OpenNebula context):
+  ONEAPP_COPILOT_MODEL          AI model from catalog (default: Devstral Small 24B)
+                                Available: Devstral 24B, Codestral 22B, Mistral Nemo 12B,
+                                Qwen2.5-Coder 7B, Codestral Mamba 7B, Mistral 7B
   ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
                                 Valid range: 512-131072 tokens
-  ONEAPP_COPILOT_THREADS        CPU threads for inference (default: 0 = auto-detect)
-                                Set to number of physical cores for best performance
-  ONEAPP_COPILOT_PASSWORD       API key / Bearer token (auto-generated 16-char if empty)
+  ONEAPP_COPILOT_PASSWORD        API key / Bearer token (auto-generated 16-char if empty)
   ONEAPP_COPILOT_DOMAIN         FQDN for Let's Encrypt certificate (optional)
                                 If empty, self-signed certificate is used
-  ONEAPP_COPILOT_MODEL          Model: 'devstral' (built-in) or a GGUF URL
-                                Example URL: https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
+  ONEAPP_COPILOT_THREADS        CPU threads for inference (default: 0 = auto-detect)
+                                Set to number of physical cores for best performance
 
 Ports:
   8443  HTTPS API (TLS + Bearer token auth + Prometheus metrics)

@@ -35,9 +35,9 @@
       :default: '0'
       :description: CPU threads for inference (0 = auto-detect)
     MODEL:
-      :type: text
-      :default: 'devstral'
-      :description: 'devstral (built-in) or direct GGUF URL'
+      :type: list
+      :default: 'Devstral Small 24B (built-in)'
+      :description: 'AI model selection from catalog'
 
 :one:
   :version: 6.10, 7.0
