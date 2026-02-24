@@ -96,6 +96,26 @@ log_copilot() {
 }
 
 # ==========================================================================
+#  HELPER: get_public_ip  (resolve internet-reachable IP for endpoint)
+# ==========================================================================
+
+# Returns the public IP of this VM so that remote users can connect.
+# Tries external lookup services first (the VM may be behind NAT),
+# falls back to the first local IP if external lookup fails.
+get_public_ip() {
+    local _pub_ip=""
+    for _svc in "https://ifconfig.me" "https://api.ipify.org" "https://icanhazip.com"; do
+        _pub_ip=$(curl -sf --max-time 5 "${_svc}" 2>/dev/null | tr -d '[:space:]')
+        if [[ "${_pub_ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "${_pub_ip}"
+            return 0
+        fi
+    done
+    # Fallback: local IP (private network, may not be reachable from internet)
+    hostname -I 2>/dev/null | awk '{print $1}'
+}
+
+# ==========================================================================
 #  REPORT: write_report_file  (INI-style report at ONE_SERVICE_REPORT)
 # ==========================================================================
 
@@ -104,7 +124,7 @@ log_copilot() {
 # Called at the END of service_bootstrap (after services confirmed running).
 write_report_file() {
     local _vm_ip
-    _vm_ip=$(hostname -I | awk '{print $1}')
+    _vm_ip=$(get_public_ip)
 
     # ALWAYS read password from persisted file
     local _password
@@ -274,7 +294,13 @@ UNIT_EOF
     cat > /etc/profile.d/slm-copilot-banner.sh <<'BANNER_EOF'
 #!/bin/bash
 [[ $- == *i* ]] || return
-_vm_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+_pub_ip=""
+for _svc in "https://ifconfig.me" "https://api.ipify.org" "https://icanhazip.com"; do
+    _pub_ip=$(curl -sf --max-time 3 "${_svc}" 2>/dev/null | tr -d '[:space:]')
+    [[ "${_pub_ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && break
+    _pub_ip=""
+done
+_vm_ip="${_pub_ip:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
 _password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'see report')
 _llama=$(systemctl is-active slm-copilot 2>/dev/null || echo 'unknown')
 _model=$(cat /var/lib/slm-copilot/model_id 2>/dev/null || echo 'unknown')
