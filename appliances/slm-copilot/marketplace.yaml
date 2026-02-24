@@ -102,7 +102,7 @@ images:
     type: OS
     dev_prefix: vd
     driver: qcow2
-    size: PLACEHOLDER
+    size: 64424509440
     checksum:
-      md5: PLACEHOLDER
-      sha256: PLACEHOLDER
+      md5: bf6e0be9b3aed527c41ed2cc73c1560c
+      sha256: c6a1b7c93a20116690c0ee838dab76304b1bcff8d9eb984cb328d31f6eada1db
