@@ -27,21 +27,21 @@ ONE_SERVICE_RECONFIGURABLE=true
 # every VM boot / reconfigure cycle.
 # --------------------------------------------------------------------------
 ONE_SERVICE_PARAMS=(
-    'ONEAPP_COPILOT_MODEL'         'configure' 'AI model selection'                          'Devstral Small 24B (built-in)'
+    'ONEAPP_COPILOT_AI_MODEL'         'configure' 'AI model selection'                          'Devstral Small 24B (built-in)'
     'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'              '32768'
-    'ONEAPP_COPILOT_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
-    'ONEAPP_COPILOT_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
-    'ONEAPP_COPILOT_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
+    'ONEAPP_COPILOT_API_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
+    'ONEAPP_COPILOT_TLS_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
+    'ONEAPP_COPILOT_CPU_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
 )
 
 # --------------------------------------------------------------------------
 # Default value assignments
 # --------------------------------------------------------------------------
-ONEAPP_COPILOT_MODEL="${ONEAPP_COPILOT_MODEL:-Devstral Small 24B (built-in)}"
+ONEAPP_COPILOT_AI_MODEL="${ONEAPP_COPILOT_AI_MODEL:-Devstral Small 24B (built-in)}"
 ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-32768}"
-ONEAPP_COPILOT_PASSWORD="${ONEAPP_COPILOT_PASSWORD:-}"
-ONEAPP_COPILOT_DOMAIN="${ONEAPP_COPILOT_DOMAIN:-}"
-ONEAPP_COPILOT_THREADS="${ONEAPP_COPILOT_THREADS:-0}"
+ONEAPP_COPILOT_API_PASSWORD="${ONEAPP_COPILOT_API_PASSWORD:-}"
+ONEAPP_COPILOT_TLS_DOMAIN="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
+ONEAPP_COPILOT_CPU_THREADS="${ONEAPP_COPILOT_CPU_THREADS:-0}"
 
 # --------------------------------------------------------------------------
 # Constants
@@ -132,15 +132,15 @@ write_report_file() {
 
     # Determine TLS mode
     local _tls_mode="self-signed"
-    if [ -n "${ONEAPP_COPILOT_DOMAIN:-}" ] && \
-       [ -f "/etc/letsencrypt/live/${ONEAPP_COPILOT_DOMAIN}/fullchain.pem" ]; then
-        _tls_mode="letsencrypt (${ONEAPP_COPILOT_DOMAIN})"
+    if [ -n "${ONEAPP_COPILOT_TLS_DOMAIN:-}" ] && \
+       [ -f "/etc/letsencrypt/live/${ONEAPP_COPILOT_TLS_DOMAIN}/fullchain.pem" ]; then
+        _tls_mode="letsencrypt (${ONEAPP_COPILOT_TLS_DOMAIN})"
     fi
 
     # Determine endpoint URL (domain if set, IP otherwise)
     local _endpoint="https://${_vm_ip}:${LLAMA_PORT}"
-    if [ -n "${ONEAPP_COPILOT_DOMAIN:-}" ]; then
-        _endpoint="https://${ONEAPP_COPILOT_DOMAIN}:${LLAMA_PORT}"
+    if [ -n "${ONEAPP_COPILOT_TLS_DOMAIN:-}" ]; then
+        _endpoint="https://${ONEAPP_COPILOT_TLS_DOMAIN}:${LLAMA_PORT}"
     fi
 
     # Query live service status
@@ -161,7 +161,7 @@ name         = ${ACTIVE_MODEL_ID}
 backend      = llama.cpp (llama-server)
 model_path   = ${ACTIVE_MODEL_PATH}
 context_size = ${ONEAPP_COPILOT_CONTEXT_SIZE}
-threads      = ${ONEAPP_COPILOT_THREADS}
+threads      = ${ONEAPP_COPILOT_CPU_THREADS}
 
 [Service status]
 llama-server = ${_llama_status}
@@ -406,15 +406,15 @@ Devstral Small 2 24B (Q4_K_M quantization) on CPU. OpenAI-compatible API
 for Cline/VS Code. Native TLS, Bearer token auth, Prometheus metrics.
 
 Configuration variables (set via OpenNebula context):
-  ONEAPP_COPILOT_MODEL          AI model from catalog (default: Devstral Small 24B)
+  ONEAPP_COPILOT_AI_MODEL          AI model from catalog (default: Devstral Small 24B)
                                 Available: Devstral 24B, Codestral 22B, Mistral Nemo 12B,
                                 Codestral Mamba 7B, Mistral 7B
   ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
                                 Valid range: 512-131072 tokens
-  ONEAPP_COPILOT_PASSWORD        API key / Bearer token (auto-generated 16-char if empty)
-  ONEAPP_COPILOT_DOMAIN         FQDN for Let's Encrypt certificate (optional)
+  ONEAPP_COPILOT_API_PASSWORD        API key / Bearer token (auto-generated 16-char if empty)
+  ONEAPP_COPILOT_TLS_DOMAIN         FQDN for Let's Encrypt certificate (optional)
                                 If empty, self-signed certificate is used
-  ONEAPP_COPILOT_THREADS        CPU threads for inference (default: 0 = auto-detect)
+  ONEAPP_COPILOT_CPU_THREADS        CPU threads for inference (default: 0 = auto-detect)
                                 Set to number of physical cores for best performance
 
 Ports:
@@ -460,7 +460,7 @@ ACTIVE_MODEL_PATH=""
 ACTIVE_MODEL_ID=""
 
 resolve_model() {
-    local _selection="${ONEAPP_COPILOT_MODEL:-Devstral Small 24B (built-in)}"
+    local _selection="${ONEAPP_COPILOT_AI_MODEL:-Devstral Small 24B (built-in)}"
 
     # Look up the selection in the catalog
     local _entry="${MODEL_CATALOG[${_selection}]:-}"
@@ -541,17 +541,17 @@ validate_config() {
         log_copilot warning "ONEAPP_COPILOT_CONTEXT_SIZE='${ONEAPP_COPILOT_CONTEXT_SIZE}' -- very large context, may cause OOM on 32 GB VM"
     fi
 
-    # ONEAPP_COPILOT_THREADS: must be a non-negative integer (0 = auto-detect)
-    if ! [[ "${ONEAPP_COPILOT_THREADS}" =~ ^[0-9]+$ ]]; then
-        log_copilot error "ONEAPP_COPILOT_THREADS='${ONEAPP_COPILOT_THREADS}' -- must be a non-negative integer (0=auto)"
+    # ONEAPP_COPILOT_CPU_THREADS: must be a non-negative integer (0 = auto-detect)
+    if ! [[ "${ONEAPP_COPILOT_CPU_THREADS}" =~ ^[0-9]+$ ]]; then
+        log_copilot error "ONEAPP_COPILOT_CPU_THREADS='${ONEAPP_COPILOT_CPU_THREADS}' -- must be a non-negative integer (0=auto)"
         _errors=$((_errors + 1))
     fi
 
-    # ONEAPP_COPILOT_DOMAIN: if set, must look like a valid FQDN (contains dot, no spaces)
-    if [ -n "${ONEAPP_COPILOT_DOMAIN}" ]; then
-        if [[ "${ONEAPP_COPILOT_DOMAIN}" =~ [[:space:]] ]] || \
-           [[ ! "${ONEAPP_COPILOT_DOMAIN}" =~ \. ]]; then
-            log_copilot error "ONEAPP_COPILOT_DOMAIN='${ONEAPP_COPILOT_DOMAIN}' -- must be a valid FQDN (e.g., copilot.example.com)"
+    # ONEAPP_COPILOT_TLS_DOMAIN: if set, must look like a valid FQDN (contains dot, no spaces)
+    if [ -n "${ONEAPP_COPILOT_TLS_DOMAIN}" ]; then
+        if [[ "${ONEAPP_COPILOT_TLS_DOMAIN}" =~ [[:space:]] ]] || \
+           [[ ! "${ONEAPP_COPILOT_TLS_DOMAIN}" =~ \. ]]; then
+            log_copilot error "ONEAPP_COPILOT_TLS_DOMAIN='${ONEAPP_COPILOT_TLS_DOMAIN}' -- must be a valid FQDN (e.g., copilot.example.com)"
             _errors=$((_errors + 1))
         fi
     fi
@@ -562,7 +562,7 @@ validate_config() {
         exit 1
     fi
 
-    log_copilot info "Configuration validation passed (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_THREADS}, domain=${ONEAPP_COPILOT_DOMAIN:-none})"
+    log_copilot info "Configuration validation passed (context_size=${ONEAPP_COPILOT_CONTEXT_SIZE}, threads=${ONEAPP_COPILOT_CPU_THREADS}, domain=${ONEAPP_COPILOT_TLS_DOMAIN:-none})"
 }
 
 # ==========================================================================
@@ -595,7 +595,7 @@ generate_selfsigned_cert() {
 #  HELPER: generate_password  (auto-generate or persist user-provided)
 # ==========================================================================
 generate_password() {
-    local _password="${ONEAPP_COPILOT_PASSWORD:-}"
+    local _password="${ONEAPP_COPILOT_API_PASSWORD:-}"
 
     if [ -z "${_password}" ]; then
         # Preserve existing auto-generated password across reboots
@@ -604,7 +604,7 @@ generate_password() {
             return 0
         fi
         _password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-        log_copilot info "Auto-generated API key (no ONEAPP_COPILOT_PASSWORD set)"
+        log_copilot info "Auto-generated API key (no ONEAPP_COPILOT_API_PASSWORD set)"
     fi
 
     mkdir -p "${LLAMA_DATA_DIR}"
@@ -621,7 +621,7 @@ generate_llama_env() {
     local _password
     _password=$(cat "${LLAMA_DATA_DIR}/password" 2>/dev/null || echo 'changeme')
 
-    local _threads="${ONEAPP_COPILOT_THREADS}"
+    local _threads="${ONEAPP_COPILOT_CPU_THREADS}"
     if [ "${_threads}" = "0" ]; then
         _threads=$(nproc)
         log_copilot info "Auto-detected ${_threads} CPU threads"
@@ -712,10 +712,10 @@ smoke_test() {
 #  HELPER: attempt_letsencrypt  (certbot standalone, port 80 is free)
 # ==========================================================================
 attempt_letsencrypt() {
-    local _domain="${ONEAPP_COPILOT_DOMAIN:-}"
+    local _domain="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
 
     if [ -z "${_domain}" ]; then
-        log_copilot info "ONEAPP_COPILOT_DOMAIN not set -- using self-signed certificate"
+        log_copilot info "ONEAPP_COPILOT_TLS_DOMAIN not set -- using self-signed certificate"
         return 0
     fi
 

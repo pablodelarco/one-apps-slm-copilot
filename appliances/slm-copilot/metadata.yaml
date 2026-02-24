@@ -20,21 +20,21 @@
 :context:
   :prefixed: ONEAPP_COPILOT
   :params:
-    PASSWORD:
+    API_PASSWORD:
       :type: password
       :description: API key / Bearer token (auto-generated if empty)
-    DOMAIN:
+    TLS_DOMAIN:
       :type: text
       :description: FQDN for Let's Encrypt certificate (self-signed if empty)
     CONTEXT_SIZE:
       :type: text
       :default: '32768'
       :description: Token context window size (512-131072)
-    THREADS:
+    CPU_THREADS:
       :type: text
       :default: '0'
       :description: CPU threads for inference (0 = auto-detect)
-    MODEL:
+    AI_MODEL:
       :type: list
       :default: 'Devstral Small 24B (built-in)'
       :description: 'AI model selection from catalog'
