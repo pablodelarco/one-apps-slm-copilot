@@ -80,6 +80,14 @@ opennebula_template:
     NETWORK: service
   NIC_DEFAULT:
     MODEL: virtio
+  inputs_order: >-
+    ONEAPP_COPILOT_MODEL,ONEAPP_COPILOT_PASSWORD,ONEAPP_COPILOT_DOMAIN,ONEAPP_COPILOT_CONTEXT_SIZE,ONEAPP_COPILOT_THREADS
+  user_inputs:
+    oneapp_copilot_model: 'M|text|Model: devstral (built-in) or HuggingFace GGUF URL| |devstral'
+    oneapp_copilot_password: 'O|password|API key / Bearer token (auto-generated if empty)'
+    oneapp_copilot_domain: 'O|text|FQDN for Let''s Encrypt certificate (self-signed if empty)'
+    oneapp_copilot_context_size: 'O|number|Context window in tokens (512-131072)| |32768'
+    oneapp_copilot_threads: 'O|number|CPU threads for inference (0 = auto-detect)| |0'
 logo: slm-copilot.png
 images:
   - name: slm_copilot_os
