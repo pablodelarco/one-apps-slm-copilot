@@ -38,6 +38,9 @@
       :type: list
       :default: 'Devstral Small 24B (built-in)'
       :description: 'AI model selection from catalog'
+    LB_BACKENDS:
+      :type: text
+      :description: 'Remote backends for load balancing (key@host:port, comma-separated, empty = standalone)'
 
 :one:
   :version: 6.10, 7.0
