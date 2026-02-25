@@ -39,6 +39,7 @@ description: |-
   - Fully configurable via OpenNebula context variables
   - Report file with connection details and Cline setup guide
   - Idempotent reconfiguration on every boot
+  - Optional LiteLLM load balancing across multiple VMs for team use
 short_description: >-
   Sovereign AI coding copilot (Devstral Small 2 24B on CPU via llama.cpp).
   No GPU required. European open-source. One-click deployment.

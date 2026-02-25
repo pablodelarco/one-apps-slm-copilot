@@ -330,8 +330,8 @@ ExecStart=/opt/litellm/bin/litellm \
   --config /etc/slm-copilot/litellm-config.yaml \
   --port 8443 \
   --num_workers 2 \
-  --ssl_keyfile_path ${LLAMA_SSL_KEY} \
-  --ssl_certfile_path ${LLAMA_SSL_CERT}
+  --ssl_keyfile_path ${SLM_SSL_KEY} \
+  --ssl_certfile_path ${SLM_SSL_CERT}
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
@@ -439,6 +439,16 @@ service_bootstrap() {
 
     # 0. Load model info persisted by service_configure
     _load_model_info
+
+    # 0b. Clean up services from previous mode (handles standalone <-> LB switching)
+    if is_lb_mode; then
+        # LB mode: llama-server must not be on :8443 from a previous standalone boot
+        systemctl stop slm-copilot.service 2>/dev/null || true
+    else
+        # Standalone mode: disable proxy if it was enabled in a previous LB boot
+        systemctl stop slm-copilot-proxy.service 2>/dev/null || true
+        systemctl disable slm-copilot-proxy.service 2>/dev/null || true
+    fi
 
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
     attempt_letsencrypt
@@ -745,6 +755,8 @@ LLAMA_THREADS=${_threads}
 LLAMA_SSL_KEY=${_ssl_key}
 LLAMA_SSL_CERT=${_ssl_cert}
 LLAMA_API_KEY=${_password}
+SLM_SSL_KEY=${LLAMA_CERT_DIR}/key.pem
+SLM_SSL_CERT=${LLAMA_CERT_DIR}/cert.pem
 EOF
     chmod 0600 "${LLAMA_ENV_FILE}"
 
@@ -792,7 +804,7 @@ wait_for_llama_local() {
 wait_for_litellm() {
     local _timeout=60 _elapsed=0
     log_copilot info "Waiting for LiteLLM proxy on :${LITELLM_PORT}"
-    while ! curl -sfk "https://127.0.0.1:${LITELLM_PORT}/health" >/dev/null 2>&1; do
+    while ! curl -sfk "https://127.0.0.1:${LITELLM_PORT}/health/liveliness" >/dev/null 2>&1; do
         sleep 3
         _elapsed=$((_elapsed + 3))
         if [ "${_elapsed}" -ge "${_timeout}" ]; then
@@ -885,11 +897,13 @@ smoke_test() {
     log_copilot info "Smoke test: health check OK"
 
     # Test 2: Non-streaming chat completion
+    local _model_id
+    _model_id=$(cat "${LLAMA_DATA_DIR}/model_id" 2>/dev/null || echo "devstral-small-2")
     local _response
     _response=$(curl -sfk "${_endpoint}/v1/chat/completions" \
         -H "Authorization: Bearer ${_api_key}" \
         -H 'Content-Type: application/json' \
-        -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Write a Python hello world"}],"max_tokens":50}') || {
+        -d "{\"model\":\"${_model_id}\",\"messages\":[{\"role\":\"user\",\"content\":\"Write a Python hello world\"}],\"max_tokens\":50}") || {
         log_copilot error "Smoke test: chat completion request failed"
         return 1
     }
@@ -903,7 +917,7 @@ smoke_test() {
     curl -sfk "${_endpoint}/v1/chat/completions" \
         -H "Authorization: Bearer ${_api_key}" \
         -H 'Content-Type: application/json' \
-        -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Say hello"}],"max_tokens":10,"stream":true}' \
+        -d "{\"model\":\"${_model_id}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":10,\"stream\":true}" \
         | grep -q 'data:' || {
         log_copilot error "Smoke test: streaming response has no SSE data lines"
         return 1
@@ -946,6 +960,8 @@ attempt_letsencrypt() {
         cat > /etc/letsencrypt/renewal-hooks/deploy/slm-copilot-restart.sh <<'HOOK'
 #!/bin/bash
 systemctl restart slm-copilot
+# Also restart LiteLLM proxy if active (LB mode uses TLS on the proxy)
+systemctl is-active --quiet slm-copilot-proxy && systemctl restart slm-copilot-proxy
 HOOK
         chmod +x /etc/letsencrypt/renewal-hooks/deploy/slm-copilot-restart.sh
     else

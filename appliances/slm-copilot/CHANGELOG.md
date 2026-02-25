@@ -4,6 +4,16 @@ All notable changes to the SLM-Copilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0] - 2026-02-25
+
+### Added
+
+- Optional LiteLLM load balancing across multiple SLM-Copilot VMs via ONEAPP_COPILOT_LB_BACKENDS
+- Least-busy routing, automatic failover (2 fails = 30s cooldown), and cross-site distribution
+- LiteLLM proxy systemd unit (slm-copilot-proxy.service) with TLS and master_key auth
+- Mode-switch cleanup: switching between standalone and LB mode across reboots is safe
+- Let's Encrypt renewal hook restarts LiteLLM proxy when active
+
 ## [2.0.0] - 2026-02-23
 
 ### Changed

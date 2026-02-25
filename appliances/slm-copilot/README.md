@@ -12,6 +12,8 @@ The entire stack is 100% open-source, built by European companies: Apache 2.0 fo
 
 ## Architecture
 
+### Standalone mode (default)
+
 ```
 Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
 +------------------+         +------------------------------------------+
@@ -26,10 +28,40 @@ Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
 
 **Data flow:** Cline sends OpenAI-compatible API requests over HTTPS to port 8443. llama-server handles TLS termination (self-signed or Let's Encrypt), validates the Bearer token, and returns chat completions (streaming or non-streaming). All inference runs on CPU using the VM's available cores. Built-in Prometheus metrics are available at `/metrics`.
 
+### Load balancer mode (optional)
+
+When you set `ONEAPP_COPILOT_LB_BACKENDS`, a [LiteLLM](https://github.com/BerriAI/litellm) proxy sits in front of the local llama-server and distributes requests across multiple backends:
+
+```
+Client --> :8443 (LiteLLM proxy, TLS + auth)
+              |
+              +--> localhost:8444  (local llama-server, plain HTTP)
+              +--> https://10.0.1.10:8443  (remote SLM-Copilot VM)
+              +--> https://10.0.1.11:8443  (remote SLM-Copilot VM)
+```
+
+LiteLLM receives the chat completion request, picks a backend using "least-busy" routing, forwards the request, and streams the response back. The client sees a single endpoint and doesn't know multiple backends exist.
+
+**Why load balance?** A single llama-server on CPU takes 30-60+ seconds per response with a 24B model. If two developers send requests simultaneously, the second waits for the first. With LiteLLM load balancing you can:
+
+1. **Scale horizontally** -- deploy 3-5 SLM-Copilot VMs, point one at the others, and 3-5 developers get responses simultaneously
+2. **Use one endpoint** -- developers configure their client once with the LB VM's address
+3. **Automatic failover** -- if a backend goes down (2 consecutive failures), LiteLLM cools it down for 30s and routes to healthy ones
+4. **Cross-site distribution** -- backends can be in different datacenters connected via Tailscale or VPN
+
+**Example:** You have offices in Madrid and Paris, each with a 32-core server:
+
+```
+ONEAPP_COPILOT_LB_BACKENDS=sk-abc@madrid-vm2:8443,sk-xyz@paris-vm1:8443
+```
+
+Now 3 backends serve requests (1 local + 2 remote), and the team gets ~3x throughput from a single API endpoint.
+
 **Components:**
 
-- **llama-server** -- llama.cpp inference server with native TLS, API key authentication, CORS support, and Prometheus metrics. Compiled with GGML\_CPU\_ALL\_VARIANTS for automatic SIMD detection (SSE3/AVX/AVX2/AVX-512). Listens on port 8443.
+- **llama-server** -- llama.cpp inference server with native TLS, API key authentication, CORS support, and Prometheus metrics. Compiled with GGML\_CPU\_ALL\_VARIANTS for automatic SIMD detection (SSE3/AVX/AVX2/AVX-512). Listens on port 8443 (standalone) or 127.0.0.1:8444 (LB mode).
 - **Devstral Small 2** -- 24B parameter coding model by Mistral AI, quantized to Q4\_K\_M (~14 GB GGUF). Optimized for code analysis, refactoring, test generation, and bug fixes.
+- **LiteLLM proxy** *(LB mode only)* -- OpenAI-compatible proxy that load-balances across multiple llama-server backends with least-busy routing, automatic failover, and TLS termination. Installed in `/opt/litellm` Python venv.
 
 ## Quick Start
 
@@ -68,6 +100,7 @@ All configuration is done via OpenNebula context variables, set when creating or
 | `ONEAPP_COPILOT_CPU_THREADS` | `0` *(auto-detect)* | CPU threads for inference. `0` means auto-detect all available cores. Set to the number of physical cores for best performance. |
 | `ONEAPP_COPILOT_API_PASSWORD` | *(auto-generated)* | API key (Bearer token). If empty, a random 16-character key is generated on first boot. |
 | `ONEAPP_COPILOT_TLS_DOMAIN` | *(empty)* | FQDN for Let's Encrypt certificate. If empty, a self-signed certificate is generated using the VM's IP address. |
+| `ONEAPP_COPILOT_LB_BACKENDS` | *(empty)* | Remote backends for load balancing. Format: `key@host:port,key@host:port`. Empty = standalone mode. See [Load balancer mode](#load-balancer-mode-optional). |
 
 **Model catalog:** Select a model from the Sunstone wizard dropdown. The default Devstral Small 24B is baked into the image; other models are downloaded from Hugging Face on first boot (subsequent boots reuse the cached download). Available models:
 
@@ -407,6 +440,8 @@ Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates llama-server.
 |-----|----------|
 | Application log | `/var/log/one-appliance/slm-copilot.log` |
 | Inference server | `journalctl -u slm-copilot` |
+| LiteLLM proxy (LB mode) | `journalctl -u slm-copilot-proxy` |
+| LiteLLM config (LB mode) | `/etc/slm-copilot/litellm-config.yaml` |
 | Report file | `/etc/one-appliance/config` |
 
 ## Performance
