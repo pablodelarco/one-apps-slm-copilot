@@ -70,7 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - HTTPS reverse proxy with nginx and self-signed TLS
 - Optional Let's Encrypt integration via ONEAPP_COPILOT_DOMAIN
 - Basic authentication with auto-generated or user-supplied password
-- Report file with connection details and Cline VS Code setup guide
+- Report file with connection details and aider setup guide
 - SSH login banner with service status
 - Configurable context variables: ONEAPP_COPILOT_AI_MODEL, ONEAPP_COPILOT_CONTEXT_SIZE, ONEAPP_COPILOT_CPU_THREADS, ONEAPP_COPILOT_API_PASSWORD, ONEAPP_COPILOT_TLS_DOMAIN
 - Build-time model pre-warming with smoke tests

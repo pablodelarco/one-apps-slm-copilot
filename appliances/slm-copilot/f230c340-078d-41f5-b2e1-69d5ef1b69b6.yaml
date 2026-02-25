@@ -24,7 +24,7 @@ description: |-
   your data never leaves your infrastructure. All components under
   Apache 2.0 license.
 
-  Connect from VS Code with the [Cline](https://cline.bot) extension for
+  Connect with [aider](https://aider.chat) or any OpenAI-compatible client for
   AI-assisted coding: code analysis, refactoring, test generation, bug fixes.
   One-click deployment from the OpenNebula marketplace to a running copilot
   in minutes.
@@ -37,7 +37,7 @@ description: |-
   - Built-in Prometheus metrics endpoint (/metrics)
   - CPU-tuned inference (mlock, flash-attn, thread pinning, SIMD auto-detect)
   - Fully configurable via OpenNebula context variables
-  - Report file with connection details and Cline setup guide
+  - Report file with connection details and aider setup guide
   - Idempotent reconfiguration on every boot
 short_description: >-
   Sovereign AI coding copilot (Devstral Small 2 24B on CPU via llama.cpp).
@@ -51,7 +51,7 @@ tags:
   - cpu
   - llama-cpp
   - devstral
-  - cline
+  - aider
   - ubuntu
 format: qcow2
 creation_time: 1739500800

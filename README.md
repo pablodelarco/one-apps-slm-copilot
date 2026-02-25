@@ -7,7 +7,7 @@ Your code never leaves your infrastructure. Deploy a private AI coding copilot o
 | **Model** | Devstral Small 2 (24B, Q4_K_M) by Mistral AI |
 | **Inference** | CPU-only via llama-server (llama.cpp) -- 32 GB RAM minimum |
 | **Security** | Native TLS + Bearer token auth out of the box |
-| **API** | OpenAI-compatible -- works with aider, Cline, Continue, and more |
+| **API** | OpenAI-compatible -- works with [aider](https://aider.chat), Continue, and more |
 | **Metrics** | Built-in Prometheus endpoint at /metrics |
 | **License** | 100% open-source (Apache 2.0 / MIT) |
 

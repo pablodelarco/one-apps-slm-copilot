@@ -6,7 +6,7 @@ One-click deployment of a sovereign, CPU-only AI coding copilot from the OpenNeb
 
 SLM-Copilot is an OpenNebula marketplace appliance that deploys a fully sovereign AI coding assistant on any standard VM -- no GPU required. It packages [Devstral Small 2](https://mistral.ai/news/devstral-2-vibe-cli) (24B parameters, Q4\_K\_M quantization) served directly by [llama-server](https://github.com/ggerganov/llama.cpp) (llama.cpp) with native TLS encryption, Bearer token authentication, and Prometheus metrics.
 
-The key value proposition is sovereignty and simplicity: your code stays in your jurisdiction, your data never leaves your infrastructure, and you get a working AI coding copilot in minutes without any cloud API subscriptions or GPU hardware. Import the appliance from the OpenNebula marketplace, instantiate a VM with 32 GB RAM and 16 vCPUs, and connect from VS Code with the [Cline](https://cline.bot) extension.
+The key value proposition is sovereignty and simplicity: your code stays in your jurisdiction, your data never leaves your infrastructure, and you get a working AI coding copilot in minutes without any cloud API subscriptions or GPU hardware. Import the appliance from the OpenNebula marketplace, instantiate a VM with 32 GB RAM and 16 vCPUs, and connect with [aider](https://aider.chat) or any OpenAI-compatible client.
 
 The entire stack is 100% open-source, built by European companies: Apache 2.0 for the Devstral model (Mistral AI, Paris), MIT for llama.cpp inference engine, and Apache 2.0 for OpenNebula (Madrid) cloud platform and the one-apps appliance framework.
 
@@ -17,8 +17,8 @@ The entire stack is 100% open-source, built by European companies: Apache 2.0 fo
 ```
 Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
 +------------------+         +------------------------------------------+
-| VS Code + Cline  |  HTTPS  | llama-server (TLS + Bearer Auth)  :8443 |
-|  OpenAI Provider |-------->|   |                                      |
+|  aider / any     |  HTTPS  | llama-server (TLS + Bearer Auth)  :8443 |
+| OpenAI client    |-------->|   |                                      |
 +------------------+         |   v                                      |
                              | Devstral Small 2 (24B Q4_K_M, ~14 GB)   |
                              |                                          |
@@ -26,7 +26,7 @@ Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
                              +------------------------------------------+
 ```
 
-**Data flow:** Cline sends OpenAI-compatible API requests over HTTPS to port 8443. llama-server handles TLS termination (self-signed or Let's Encrypt), validates the Bearer token, and returns chat completions (streaming or non-streaming). All inference runs on CPU using the VM's available cores. Built-in Prometheus metrics are available at `/metrics`.
+**Data flow:** The client sends OpenAI-compatible API requests over HTTPS to port 8443. llama-server handles TLS termination (self-signed or Let's Encrypt), validates the Bearer token, and returns chat completions (streaming or non-streaming). All inference runs on CPU using the VM's available cores. Built-in Prometheus metrics are available at `/metrics`.
 
 ### Load balancer mode (optional)
 
@@ -128,7 +128,7 @@ The LB VM boots with LiteLLM on :8443, its own llama-server on :8444 (as a local
 
 **4. Give developers the LB VM's endpoint**
 
-Developers configure their client (Cline, Continue, etc.) with:
+Developers configure their client (aider, Continue, etc.) with:
 
 - **Base URL:** `https://<lb-vm-ip>:8443/v1`
 - **API Key:** The LB VM's `ONEAPP_COPILOT_API_PASSWORD`
@@ -187,8 +187,8 @@ curl -sk -H "Authorization: Bearer <lb-api-key>" \
    ```bash
    cat /etc/one-appliance/config
    ```
-   This shows the endpoint URL, API key, model info, and Cline configuration.
-5. **Connect from VS Code** using the Cline extension (see [Cline Setup](#cline-setup-vs-code))
+   This shows the endpoint URL, API key, model ID, and a curl test command.
+5. **Connect with aider** (see [aider Setup](#aider-setup))
 6. **Validate** the deployment:
    ```bash
    make test ENDPOINT=https://<vm-ip>:8443 PASSWORD=<password>
@@ -223,38 +223,38 @@ The built-in Devstral remains on disk and is used again if you switch back.
 
 All variables are re-read on every VM boot (the appliance is fully reconfigurable). Change a value in the VM template and reboot to apply.
 
-## Cline Setup (VS Code)
+## aider Setup
 
-[Cline](https://cline.bot) is an AI coding assistant extension for VS Code that supports OpenAI-compatible API providers.
+[aider](https://aider.chat) is an AI pair-programming tool for the terminal that supports OpenAI-compatible API providers.
 
-### Step-by-step
+### Install and connect
 
-1. Install the **Cline** extension in VS Code (search for "Cline" in the Extensions marketplace)
-2. Open the Cline panel and click the **settings gear icon**
-3. Select **"OpenAI Compatible"** as the API Provider
-4. Enter the connection details from your VM's report file (`cat /etc/one-appliance/config`):
-   - **Base URL:** `https://<vm-ip>:8443/v1`
-   - **API Key:** `<api-key>`
-   - **Model ID:** `devstral-small-2`
+```bash
+pip install aider-chat
 
-### JSON configuration snippet
-
-For direct settings.json editing, add:
-
-```json
-{
-  "cline.apiProvider": "openai-compatible",
-  "cline.openAiCompatible.apiUrl": "https://<vm-ip>:8443",
-  "cline.openAiCompatible.apiKey": "<api-key>",
-  "cline.openAiCompatible.modelId": "devstral-small-2"
-}
+aider --openai-api-key <api-key> \
+      --openai-api-base https://<vm-ip>:8443/v1 \
+      --model openai/devstral-small-2 \
+      --no-show-model-warnings
 ```
 
-Replace `<vm-ip>` with the VM's IP address (or domain if `ONEAPP_COPILOT_TLS_DOMAIN` is set) and `<api-key>` with the API key from the report file.
+Replace `<vm-ip>` with the VM's IP address (or domain if `ONEAPP_COPILOT_TLS_DOMAIN` is set) and `<api-key>` with the API key from the report file (`cat /etc/one-appliance/config`).
+
+### Shell alias (optional)
+
+Add to your `~/.bashrc` or `~/.zshrc` for quick access:
+
+```bash
+alias copilot='aider --openai-api-key <api-key> --openai-api-base https://<vm-ip>:8443/v1 --model openai/devstral-small-2 --no-show-model-warnings'
+```
 
 ### Notes on self-signed certificates
 
-If using the default self-signed certificate (no `ONEAPP_COPILOT_TLS_DOMAIN` set), the Cline extension should work without issues as it typically does not verify TLS certificates for custom endpoints. If you encounter connection errors, the report file on the VM (`cat /etc/one-appliance/config`) provides the exact configuration values and a curl test command for debugging.
+If using the default self-signed certificate (no `ONEAPP_COPILOT_TLS_DOMAIN` set), aider should work without issues. If you encounter TLS errors, set `OPENAI_API_VERIFY_SSL=false` in your environment or use Let's Encrypt (`ONEAPP_COPILOT_TLS_DOMAIN`) for a trusted certificate.
+
+### Other clients
+
+Any OpenAI-compatible client works with the same base URL (`https://<vm-ip>:8443/v1`), API key, and model ID (`devstral-small-2`). This includes Continue, Open Interpreter, LangChain, and others.
 
 ## Building from Source
 
@@ -531,13 +531,13 @@ The 24B Q4\_K\_M model needs approximately 14 GB of RAM. The KV cache scales wit
 
 Reduce `ONEAPP_COPILOT_CONTEXT_SIZE` if the OOM killer terminates llama-server.
 
-### Cline cannot connect
+### Client cannot connect
 
 1. Verify HTTPS is working: `curl -k https://<vm-ip>:8443/health`
 2. Check the API key: SSH into the VM and run `cat /etc/one-appliance/config`
 3. Verify firewall allows port 8443
-4. Ensure the API URL in Cline includes `/v1` (e.g., `https://<vm-ip>:8443/v1`)
-5. Check Cline logs in VS Code: Output panel > select "Cline" from the dropdown
+4. Ensure the API URL includes `/v1` (e.g., `https://<vm-ip>:8443/v1`)
+5. For self-signed cert issues, set `OPENAI_API_VERIFY_SSL=false` or use Let's Encrypt
 
 ### Log locations
 

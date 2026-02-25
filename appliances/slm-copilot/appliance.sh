@@ -15,7 +15,7 @@ ONE_SERVICE_VERSION='2.0.0'
 ONE_SERVICE_BUILD=$(date +%s)
 ONE_SERVICE_SHORT_DESCRIPTION='CPU-only AI coding copilot (Devstral Small 2 24B via llama.cpp)'
 ONE_SERVICE_DESCRIPTION='Sovereign AI coding assistant serving Devstral Small 2 24B
-via llama-server (llama.cpp). OpenAI-compatible API for Cline/VS Code integration.
+via llama-server (llama.cpp). OpenAI-compatible API for aider, Continue, and more.
 Native TLS, API key auth, and Prometheus metrics. CPU-only inference, no GPU required.'
 ONE_SERVICE_RECONFIGURABLE=true
 
@@ -133,7 +133,7 @@ get_public_ip() {
 # ==========================================================================
 
 # Writes the service report file with connection info, credentials, model
-# details, live service status, Cline configuration, and a curl test command.
+# details, live service status, client configuration, and a curl test command.
 # Called at the END of service_bootstrap (after services confirmed running).
 write_report_file() {
     local _vm_ip
@@ -183,22 +183,18 @@ threads      = ${ONEAPP_COPILOT_CPU_THREADS}
 llama-server = ${_llama_status}$(is_lb_mode && printf '\nlitellm-proxy = %s' "${_proxy_status}")
 tls          = ${_tls_mode}
 
-[Cline VS Code setup]
-1. Install Cline extension in VS Code
-2. Click settings gear icon in Cline panel
-3. Select "OpenAI Compatible" as API Provider
-4. Enter these values:
-   Base URL  : ${_endpoint}/v1
-   API Key   : ${_password}
-   Model ID  : ${ACTIVE_MODEL_ID}
+[aider setup]
+pip install aider-chat
 
-[Cline JSON snippet]
-{
-  "apiProvider": "openai-compatible",
-  "openAiBaseUrl": "${_endpoint}/v1",
-  "openAiApiKey": "${_password}",
-  "openAiModelId": "${ACTIVE_MODEL_ID}"
-}
+aider --openai-api-key ${_password} \\
+      --openai-api-base ${_endpoint}/v1 \\
+      --model openai/${ACTIVE_MODEL_ID} \\
+      --no-show-model-warnings
+
+[Any OpenAI-compatible client]
+Base URL  : ${_endpoint}/v1
+API Key   : ${_password}
+Model ID  : ${ACTIVE_MODEL_ID}
 
 [Test with curl]
 curl -k -H "Authorization: Bearer ${_password}" ${_endpoint}/v1/chat/completions \\
@@ -475,7 +471,7 @@ service_bootstrap() {
         wait_for_litellm
     fi
 
-    # 5. Write report file with connection info, credentials, Cline config
+    # 5. Write report file with connection info, credentials, client config
     write_report_file
 
     if is_lb_mode; then
@@ -505,7 +501,7 @@ SLM-Copilot Appliance
 
 Sovereign AI coding assistant powered by llama-server (llama.cpp) serving
 Devstral Small 2 24B (Q4_K_M quantization) on CPU. OpenAI-compatible API
-for Cline/VS Code. Native TLS, Bearer token auth, Prometheus metrics.
+for aider and other OpenAI clients. Native TLS, Bearer token auth, Prometheus metrics.
 
 Configuration variables (set via OpenNebula context):
   ONEAPP_COPILOT_AI_MODEL          AI model from catalog (default: Devstral Small 24B)
@@ -540,7 +536,7 @@ Configuration files:
   /etc/slm-copilot/litellm-config.yaml             LiteLLM config (LB mode only)
 
 Report and logs:
-  /etc/one-appliance/config                    Service report (credentials, Cline config)
+  /etc/one-appliance/config                    Service report (credentials, client config)
   /var/log/one-appliance/slm-copilot.log       Application log (all stages)
 
 Health check:
