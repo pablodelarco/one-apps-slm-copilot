@@ -116,30 +116,30 @@ The default Devstral Small 24B is baked into the image. Other models are downloa
 Set `ONEAPP_COPILOT_LB_BACKENDS` on one VM to turn it into a load balancer. The `key` in each entry is the remote VM's `ONEAPP_COPILOT_API_PASSWORD`.
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │            OpenNebula Federation         │
-                    │         (shared user DB, SSO, ACLs)      │
-                    └────────┬──────────────┬─────────────┬────┘
-                             │              │             │
-                ┌────────────┴──┐  ┌────────┴────────┐  ┌─┴────────────┐
-                │  Zone: Madrid │  │  Zone: Paris    │  │  Zone: Berlin │
-                │  oned + hosts │  │  oned + hosts   │  │  oned + hosts │
-                └──────┬────────┘  └──────┬──────────┘  └──────┬────────┘
-                       │                  │                    │
-              ┌────────┴────────┐  ┌──────┴──────┐    ┌───────┴───────┐
-              │  VM: LB + local │  │ VM: backend │    │ VM: backend   │
-              │  (LiteLLM)      │  │ standalone   │    │ standalone    │
-              │  :8443 ◄──┐     │  │ :8443        │    │ :8443         │
-              │            │    │  │              │    │               │
-              │  llama-svr │    │  │ llama-server │    │ llama-server  │
-              │  :8444     │    │  │ Devstral 24B │    │ Devstral 24B  │
-              └────────────┘    │  └──────────────┘    └───────────────┘
-                                │         ▲                    ▲
-                                └─────────┴────────────────────┘
-                              LiteLLM routes to all backends
-                              (least-busy, auto-failover)
+                    ┌──────────────────────────────────────────┐
+                    │            OpenNebula Federation          │
+                    │         (shared user DB, SSO, ACLs)       │
+                    └───────┬───────────────┬──────────────┬────┘
+                            │               │              │
+               ┌────────────┴──┐   ┌────────┴────────┐  ┌─┴──────────────┐
+               │  Zone: Madrid │   │  Zone: Paris    │  │  Zone: Berlin  │
+               └──────┬────────┘   └────────┬────────┘  └───────┬────────┘
+                      │                     │                    │
+              ┌───────┴──────────┐   ┌──────┴───────┐   ┌───────┴───────┐
+              │ LB VM (Madrid)   │   │ Paris VM     │   │ Berlin VM     │
+              │                  │   │ standalone   │   │ standalone    │
+              │  LiteLLM :8443   │   │              │   │               │
+              │    │             │   │ llama-server │   │ llama-server  │
+              │    ├──► local    │   │ Devstral 24B │   │ Devstral 24B  │
+              │    │  llama-svr  │   │ :8443        │   │ :8443         │
+              │    │  :8444      │   │              │   │               │
+              └────┼─────────────┘   └──────▲───────┘   └───────▲───────┘
+                   │                        │                    │
+                   └────────────────────────┴────────────────────┘
+                        LiteLLM routes to all 3 backends
+                        (least-busy, auto-failover)
 
-Developers ──HTTPS──► Madrid VM :8443 (single endpoint)
+              Developers ──HTTPS──► Madrid :8443 (single endpoint)
 ```
 
 ### Setup
