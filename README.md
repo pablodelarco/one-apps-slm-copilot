@@ -46,6 +46,62 @@ Set these in the VM template before booting (all optional, re-read on every rebo
 | `ONEAPP_COPILOT_MODEL` | `devstral` | `devstral` (built-in) or a direct GGUF URL from Hugging Face |
 | `ONEAPP_COPILOT_LB_BACKENDS` | *(empty)* | Load balancer backends (`key@host:port`, comma-separated). Empty = standalone |
 
+## Load Balancing Across Zones
+
+Set `ONEAPP_COPILOT_LB_BACKENDS` on one VM to turn it into a load balancer that distributes requests across multiple SLM-Copilot instances. The `key` in each entry is the remote VM's `ONEAPP_COPILOT_PASSWORD` (the API password / Bearer token).
+
+```
+                      Developers
+                          │
+                          ▼
+               ┌─────────────────────┐
+               │  LB VM (Madrid)     │
+               │  LiteLLM :8443      │
+               │  + local llama-svr  │
+               └──┬──────────┬───────┘
+                  │          │
+         ┌────────▼──┐  ┌───▼────────┐
+         │ Paris VM  │  │ Berlin VM  │
+         │ standalone│  │ standalone │
+         │ :8443     │  │ :8443      │
+         └───────────┘  └────────────┘
+```
+
+### Setup
+
+1. **Deploy standalone VMs** in each zone — standard SLM-Copilot VMs, no special config. Note each VM's IP and `ONEAPP_COPILOT_PASSWORD` (check with `cat /etc/one-appliance/config`).
+
+2. **Ensure network reachability** on port 8443 between all VMs. Options:
+   - [Tailscale](https://tailscale.com) (recommended) — automatic mesh, use 100.x.y.z IPs
+   - WireGuard, VPN, or public IPs with port 8443 open
+
+3. **Deploy the LB VM** with backends pointing at the remote VMs:
+   ```
+   ONEAPP_COPILOT_LB_BACKENDS=sk-paris-pw@100.64.1.10:8443,sk-berlin-pw@100.64.1.20:8443
+   ```
+   Format: `<remote_api_password>@<host>:<port>` — comma-separated. The LB VM's own llama-server is automatically included as a local backend.
+
+4. **Give developers the LB VM's endpoint** — they configure `https://<lb-vm-ip>:8443/v1` with the LB VM's own API key. They don't need to know about the backends.
+
+### Verify
+
+```bash
+# On the LB VM:
+curl -sk https://127.0.0.1:8443/health/liveliness   # "I'm alive!"
+journalctl -u slm-copilot-proxy -f                   # watch routing decisions
+```
+
+### Scaling guide
+
+| Team size | Backend VMs | Config |
+|-----------|------------|--------|
+| 1-2 devs | 1 (standalone, no LB) | Leave `LB_BACKENDS` empty |
+| 3-5 devs | 2-3 VMs | `key1@host1:8443,key2@host2:8443` |
+| 5-10 devs | 4-5 VMs | Add more `key@host:8443` entries |
+| 10+ devs | 5+ VMs | Consider two LB endpoints for redundancy |
+
+LiteLLM uses least-busy routing with automatic failover (30s cooldown after 2 consecutive failures). See [`appliances/slm-copilot/README.md`](appliances/slm-copilot/README.md) for full technical details.
+
 ## Troubleshooting
 
 | Problem | Check |
