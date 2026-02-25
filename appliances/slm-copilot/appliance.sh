@@ -15,7 +15,7 @@ ONE_SERVICE_VERSION='2.0.0'
 ONE_SERVICE_BUILD=$(date +%s)
 ONE_SERVICE_SHORT_DESCRIPTION='CPU-only AI coding copilot (Devstral Small 2 24B via llama.cpp)'
 ONE_SERVICE_DESCRIPTION='Sovereign AI coding assistant serving Devstral Small 2 24B
-via llama-server (llama.cpp). OpenAI-compatible API for aider, Continue, and more.
+via llama-server (llama.cpp). OpenAI-compatible API for aider and any OpenAI client.
 Native TLS, API key auth, and Prometheus metrics. CPU-only inference, no GPU required.'
 ONE_SERVICE_RECONFIGURABLE=true
 

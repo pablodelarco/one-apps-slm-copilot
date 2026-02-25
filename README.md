@@ -4,89 +4,163 @@ Your code never leaves your infrastructure. Deploy a private AI coding copilot o
 
 | | |
 |---|---|
-| **Model** | Devstral Small 2 (24B, Q4_K_M) by Mistral AI |
+| **Model** | Devstral Small 2 (24B, Q4\_K\_M) by Mistral AI |
 | **Inference** | CPU-only via llama-server (llama.cpp) -- 32 GB RAM minimum |
 | **Security** | Native TLS + Bearer token auth out of the box |
-| **API** | OpenAI-compatible -- works with [aider](https://aider.chat), Continue, and more |
+| **API** | OpenAI-compatible -- works with [aider](https://aider.chat) and any OpenAI client |
 | **Metrics** | Built-in Prometheus endpoint at /metrics |
 | **License** | 100% open-source (Apache 2.0 / MIT) |
 
+## Architecture
+
+### Standalone mode (default)
+
+```
+Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
++------------------+         +------------------------------------------+
+|  aider / any     |  HTTPS  | llama-server (TLS + Bearer Auth)  :8443 |
+| OpenAI client    |-------->|   |                                      |
++------------------+         |   v                                      |
+                             | Devstral Small 2 (24B Q4_K_M, ~14 GB)   |
+                             |                                          |
+                             | Built-in: CORS, Prometheus /metrics      |
+                             +------------------------------------------+
+```
+
+The client sends OpenAI-compatible API requests over HTTPS to port 8443. llama-server handles TLS termination (self-signed or Let's Encrypt), validates the Bearer token, and returns chat completions (streaming or non-streaming). All inference runs on CPU.
+
+### Load balancer mode (optional)
+
+When you set `ONEAPP_COPILOT_LB_BACKENDS`, a [LiteLLM](https://github.com/BerriAI/litellm) proxy sits in front of the local llama-server and distributes requests across multiple backends:
+
+```
+Client --> :8443 (LiteLLM proxy, TLS + auth)
+              |
+              +--> localhost:8444  (local llama-server, plain HTTP)
+              +--> https://10.0.1.10:8443  (remote SLM-Copilot VM)
+              +--> https://10.0.1.11:8443  (remote SLM-Copilot VM)
+```
+
+LiteLLM picks a backend using "least-busy" routing, forwards the request, and streams the response back. The client sees a single endpoint.
+
+**Why load balance?** A single llama-server on CPU takes 30-60+ seconds per response with a 24B model. With LB you can scale horizontally (3-5 VMs = 3-5 developers served simultaneously), use one endpoint, get automatic failover (30s cooldown after 2 consecutive failures), and distribute across datacenters.
+
+**Components:**
+
+- **llama-server** -- llama.cpp inference server with native TLS, API key auth, CORS, and Prometheus metrics. Compiled with GGML\_CPU\_ALL\_VARIANTS for automatic SIMD detection. Listens on port 8443 (standalone) or 127.0.0.1:8444 (LB mode).
+- **Devstral Small 2** -- 24B coding model by Mistral AI, quantized to Q4\_K\_M (~14 GB GGUF).
+- **LiteLLM proxy** *(LB mode only)* -- OpenAI-compatible proxy with least-busy routing, automatic failover, and TLS termination. Installed in `/opt/litellm` Python venv.
+
 ## Quick Start
 
-```bash
-# 1. Import the appliance from the OpenNebula marketplace (Storage > Apps > "SLM-Copilot")
-# 2. Create a VM: 32 GB RAM, 16 vCPUs, CPU model = host-passthrough
-# 3. Boot and wait ~2 min, then SSH in:
-cat /etc/one-appliance/config   # shows your API endpoint and API key
-```
+### Prerequisites
 
-Connect with [aider](https://aider.chat):
+- OpenNebula 6.10+ with KVM hypervisor
+- VM template: 32 GB RAM, 16 vCPU, 60 GB disk (minimum), **CPU model: `host-passthrough`**
+- Network: port 8443 open (and port 80 if using Let's Encrypt)
 
-```bash
-pip install aider-chat
+> **Important:** The VM template must use `host-passthrough` CPU model so that AVX2/AVX-512 instructions are exposed to the guest. Without this, llama.cpp inference will hang.
 
-aider --openai-api-key <api-key> \
-      --openai-api-base https://<vm-ip>:8443/v1 \
-      --model openai/devstral-small-2 \
-      --no-show-model-warnings
-```
+### Steps
 
-Any OpenAI-compatible client works with the same base URL, API key, and model ID.
+1. **Import** the appliance from the OpenNebula marketplace (or build from source with `make build`)
+2. **Create a VM** from the template, optionally setting context variables (see [Configuration](#configuration))
+3. **Wait for boot** -- service startup takes approximately 2 minutes (model loading)
+4. **Check connection details** by SSHing into the VM:
+   ```bash
+   cat /etc/one-appliance/config
+   ```
+5. **Connect with aider:**
+   ```bash
+   pip install aider-chat
+
+   aider --openai-api-key <api-key> \
+         --openai-api-base https://<vm-ip>:8443/v1 \
+         --model openai/devstral-small-2 \
+         --no-show-model-warnings
+   ```
+   Replace `<vm-ip>` and `<api-key>` with the values from the report file. Any OpenAI-compatible client works with the same base URL, API key, and model ID.
+
+6. **Validate** the deployment:
+   ```bash
+   make test ENDPOINT=https://<vm-ip>:8443 PASSWORD=<api-key>
+   ```
 
 ## Configuration
 
-Set these in the VM template before booting (all optional, re-read on every reboot):
+All configuration is via OpenNebula context variables, set in the VM template. All are re-read on every boot -- change a value and reboot to apply.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ONEAPP_COPILOT_PASSWORD` | *(auto-generated)* | API key (Bearer token) |
-| `ONEAPP_COPILOT_DOMAIN` | *(empty)* | FQDN for Let's Encrypt TLS (self-signed if empty) |
-| `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window (512-131072) |
-| `ONEAPP_COPILOT_THREADS` | `0` | CPU threads for inference (`0` = all cores) |
-| `ONEAPP_COPILOT_MODEL` | `devstral` | `devstral` (built-in) or a direct GGUF URL from Hugging Face |
-| `ONEAPP_COPILOT_LB_BACKENDS` | *(empty)* | Load balancer backends (`key@host:port`, comma-separated). Empty = standalone |
+| `ONEAPP_COPILOT_AI_MODEL` | `Devstral Small 24B (built-in)` | AI model from the built-in catalog |
+| `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window (8192, 16384, or 32768) |
+| `ONEAPP_COPILOT_CPU_THREADS` | `0` *(auto-detect)* | CPU threads for inference (`0` = all cores) |
+| `ONEAPP_COPILOT_API_PASSWORD` | *(auto-generated)* | API key (Bearer token). Auto-generated if empty |
+| `ONEAPP_COPILOT_TLS_DOMAIN` | *(empty)* | FQDN for Let's Encrypt (self-signed if empty) |
+| `ONEAPP_COPILOT_LB_BACKENDS` | *(empty)* | Remote backends: `key@host:port,key@host:port`. Empty = standalone |
+
+### Model catalog
+
+The default Devstral Small 24B is baked into the image. Other models are downloaded from Hugging Face on first boot:
+
+| Model | Size (Q4\_K\_M) | RAM Usage | Best For |
+|-------|-----------------|-----------|----------|
+| Devstral Small 24B (built-in) | 14.3 GB | ~16 GB | Coding (Mistral, latest) |
+| Codestral 22B | 13.3 GB | ~15 GB | Coding (Mistral flagship) |
+| Mistral Nemo 12B | 7.5 GB | ~10 GB | Reasoning + coding |
+| Codestral Mamba 7B | 4.0 GB | ~6 GB | Coding (SSM architecture) |
+| Mistral 7B | 4.4 GB | ~6 GB | General purpose |
 
 ## Load Balancing Across Zones
 
-Set `ONEAPP_COPILOT_LB_BACKENDS` on one VM to turn it into a load balancer that distributes requests across multiple SLM-Copilot instances. The `key` in each entry is the remote VM's `ONEAPP_COPILOT_PASSWORD` (the API password / Bearer token).
+Set `ONEAPP_COPILOT_LB_BACKENDS` on one VM to turn it into a load balancer. The `key` in each entry is the remote VM's `ONEAPP_COPILOT_API_PASSWORD`.
 
 ```
-                      Developers
-                          │
-                          ▼
-               ┌─────────────────────┐
-               │  LB VM (Madrid)     │
-               │  LiteLLM :8443      │
-               │  + local llama-svr  │
-               └──┬──────────┬───────┘
-                  │          │
-         ┌────────▼──┐  ┌───▼────────┐
-         │ Paris VM  │  │ Berlin VM  │
-         │ standalone│  │ standalone │
-         │ :8443     │  │ :8443      │
-         └───────────┘  └────────────┘
+                    ┌─────────────────────────────────────────┐
+                    │            OpenNebula Federation         │
+                    │         (shared user DB, SSO, ACLs)      │
+                    └────────┬──────────────┬─────────────┬────┘
+                             │              │             │
+                ┌────────────┴──┐  ┌────────┴────────┐  ┌─┴────────────┐
+                │  Zone: Madrid │  │  Zone: Paris    │  │  Zone: Berlin │
+                │  oned + hosts │  │  oned + hosts   │  │  oned + hosts │
+                └──────┬────────┘  └──────┬──────────┘  └──────┬────────┘
+                       │                  │                    │
+              ┌────────┴────────┐  ┌──────┴──────┐    ┌───────┴───────┐
+              │  VM: LB + local │  │ VM: backend │    │ VM: backend   │
+              │  (LiteLLM)      │  │ standalone   │    │ standalone    │
+              │  :8443 ◄──┐     │  │ :8443        │    │ :8443         │
+              │            │    │  │              │    │               │
+              │  llama-svr │    │  │ llama-server │    │ llama-server  │
+              │  :8444     │    │  │ Devstral 24B │    │ Devstral 24B  │
+              └────────────┘    │  └──────────────┘    └───────────────┘
+                                │         ▲                    ▲
+                                └─────────┴────────────────────┘
+                              LiteLLM routes to all backends
+                              (least-busy, auto-failover)
+
+Developers ──HTTPS──► Madrid VM :8443 (single endpoint)
 ```
 
 ### Setup
 
-1. **Deploy standalone VMs** in each zone — standard SLM-Copilot VMs, no special config. Note each VM's IP and `ONEAPP_COPILOT_PASSWORD` (check with `cat /etc/one-appliance/config`).
+1. **Deploy standalone VMs** in each zone -- standard SLM-Copilot VMs, no special config. Note each VM's IP and API password (`cat /etc/one-appliance/config`).
 
-2. **Ensure network reachability** on port 8443 between all VMs. Options:
-   - [Tailscale](https://tailscale.com) (recommended) — automatic mesh, use 100.x.y.z IPs
+2. **Ensure network reachability** on port 8443 between all VMs:
+   - [Tailscale](https://tailscale.com) (recommended) -- automatic mesh, use 100.x.y.z IPs
    - WireGuard, VPN, or public IPs with port 8443 open
 
-3. **Deploy the LB VM** with backends pointing at the remote VMs:
+3. **Deploy the LB VM** with backends:
    ```
    ONEAPP_COPILOT_LB_BACKENDS=sk-paris-pw@100.64.1.10:8443,sk-berlin-pw@100.64.1.20:8443
    ```
-   Format: `<remote_api_password>@<host>:<port>` — comma-separated. The LB VM's own llama-server is automatically included as a local backend.
+   Format: `<remote_api_password>@<host>:<port>` -- comma-separated. The LB VM's own llama-server is automatically included as a local backend.
 
-4. **Give developers the LB VM's endpoint** — they configure `https://<lb-vm-ip>:8443/v1` with the LB VM's own API key. They don't need to know about the backends.
+4. **Give developers the LB VM's endpoint** -- `https://<lb-vm-ip>:8443/v1` with the LB VM's own API key. They don't need to know about the backends.
 
 ### Verify
 
 ```bash
-# On the LB VM:
 curl -sk https://127.0.0.1:8443/health/liveliness   # "I'm alive!"
 journalctl -u slm-copilot-proxy -f                   # watch routing decisions
 ```
@@ -100,20 +174,56 @@ journalctl -u slm-copilot-proxy -f                   # watch routing decisions
 | 5-10 devs | 4-5 VMs | Add more `key@host:8443` entries |
 | 10+ devs | 5+ VMs | Consider two LB endpoints for redundancy |
 
-LiteLLM uses least-busy routing with automatic failover (30s cooldown after 2 consecutive failures). See [`appliances/slm-copilot/README.md`](appliances/slm-copilot/README.md) for full technical details.
+## Testing
+
+Validate a running instance:
+
+```bash
+make test ENDPOINT=https://<vm-ip>:8443 PASSWORD=<api-key>
+```
+
+Runs 7 checks: HTTPS connectivity, health endpoint, auth rejection, auth acceptance, model listing, chat completion (non-streaming), and streaming SSE.
 
 ## Troubleshooting
 
-| Problem | Check |
-|---------|-------|
-| Service won't start | VM needs at least 32 GB RAM |
-| Slow inference | Add more vCPUs; CPU must support AVX2. Set CPU model to `host-passthrough` in the VM template |
-| Inference hangs | VM CPU model must be `host-passthrough` (not `qemu64`). Without it, AVX2/AVX-512 instructions are not exposed to the guest |
-| Let's Encrypt fails | DNS must resolve and port 80 must be reachable |
-| Client can't connect | Port 8443 open? Test: `curl -k https://<vm-ip>:8443/health` |
+| Problem | Fix |
+|---------|-----|
+| Service won't start | VM needs at least 32 GB RAM. Check: `journalctl -u slm-copilot` |
+| Slow inference | Add more vCPUs. Ensure `host-passthrough` CPU model. Check: `grep avx2 /proc/cpuinfo` |
+| Inference hangs | CPU model must be `host-passthrough` (not `qemu64`). Set in VM template: CPU Model > `host-passthrough` |
+| Let's Encrypt fails | DNS must resolve and port 80 must be reachable. Falls back to self-signed automatically |
+| Client can't connect | Port 8443 open? Test: `curl -k https://<vm-ip>:8443/health`. For self-signed cert issues: `OPENAI_API_VERIFY_SSL=false` |
+| Out of memory | Reduce `ONEAPP_COPILOT_CONTEXT_SIZE`. 24B model needs ~14 GB + KV cache overhead |
 
-Logs: `journalctl -u slm-copilot` (inference) / `/etc/one-appliance/config` (credentials)
+### Log locations
+
+| Log | Location |
+|-----|----------|
+| Inference server | `journalctl -u slm-copilot` |
+| LiteLLM proxy (LB mode) | `journalctl -u slm-copilot-proxy` |
+| Application log | `/var/log/one-appliance/slm-copilot.log` |
+| Report file | `/etc/one-appliance/config` |
+
+## Performance
+
+| vCPUs | RAM | Context Size | Approx. Speed |
+|-------|-----|--------------|---------------|
+| 8 | 32 GB | 32K | ~3-5 tok/s |
+| 16 | 32 GB | 32K | ~5-10 tok/s |
+| 32 | 64 GB | 64K | ~10-15 tok/s |
+
+AVX-512 improves inference speed 20-40% over AVX2-only CPUs. First request after boot is slower due to model loading (~30-60 seconds).
 
 ## License
 
 Apache License 2.0. Built with open-source components by [Mistral AI](https://mistral.ai) (Paris) and [OpenNebula](https://opennebula.io) (Madrid).
+
+| Component | License | Maintainer |
+|-----------|---------|------------|
+| Devstral Small 2 | Apache 2.0 | Mistral AI (Paris) |
+| llama.cpp | MIT | ggerganov |
+| OpenNebula one-apps | Apache 2.0 | OpenNebula Systems (Madrid) |
+
+## Author
+
+Pablo del Arco, Cloud-Edge Innovation Engineer at [OpenNebula Systems](https://opennebula.io/).
