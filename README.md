@@ -7,7 +7,7 @@ Your code never leaves your infrastructure. Deploy a private AI coding copilot o
 | **Model** | Devstral Small 2 (24B, Q4\_K\_M) by Mistral AI |
 | **Inference** | CPU-only via llama-server (llama.cpp) -- 32 GB RAM minimum |
 | **Security** | Native TLS + Bearer token auth out of the box |
-| **API** | OpenAI-compatible -- works with [aider](https://aider.chat) and any OpenAI client |
+| **API** | OpenAI-compatible -- works with [aider](https://aider.chat), [OpenCode](https://opencode.ai), and any OpenAI client |
 | **Metrics** | Built-in Prometheus endpoint at /metrics |
 | **License** | 100% open-source (Apache 2.0 / MIT) |
 
@@ -18,8 +18,8 @@ Your code never leaves your infrastructure. Deploy a private AI coding copilot o
 ```
 Developer Machine            OpenNebula VM (32 GB RAM, 16 vCPU)
 +------------------+         +------------------------------------------+
-|  aider / any     |  HTTPS  | llama-server (TLS + Bearer Auth)  :8443 |
-| OpenAI client    |-------->|   |                                      |
+| aider / OpenCode |  HTTPS  | llama-server (TLS + Bearer Auth)  :8443 |
+| / any OAI client |-------->|   |                                      |
 +------------------+         |   v                                      |
                              | Devstral Small 2 (24B Q4_K_M, ~14 GB)   |
                              |                                          |
@@ -102,7 +102,9 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
    ```bash
    cat /etc/one-appliance/config
    ```
-5. **Connect with aider:**
+5. **Connect a client** -- replace `<vm-ip>` and `<api-key>` with values from the report file:
+
+   **aider** (chat-based coding assistant):
    ```bash
    pip install aider-chat
 
@@ -111,7 +113,43 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
          --model openai/devstral-small-2 \
          --no-show-model-warnings
    ```
-   Replace `<vm-ip>` and `<api-key>` with the values from the report file. Any OpenAI-compatible client works with the same base URL, API key, and model ID.
+
+   **OpenCode** (autonomous coding agent with tool use):
+   ```bash
+   curl -fsSL https://opencode.ai/install | bash
+   ```
+   Create `opencode.json` in your project root:
+   ```json
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "provider": {
+       "slm-copilot": {
+         "npm": "@ai-sdk/openai-compatible",
+         "name": "SLM-Copilot",
+         "options": {
+           "baseURL": "https://<vm-ip>:8443/v1",
+           "apiKey": "{env:SLM_COPILOT_API_KEY}"
+         },
+         "models": {
+           "devstral-small-2": {
+             "name": "Devstral Small 24B"
+           }
+         }
+       }
+     },
+     "model": {
+       "default": "slm-copilot/devstral-small-2"
+     }
+   }
+   ```
+   Then set your API key and run:
+   ```bash
+   export SLM_COPILOT_API_KEY=<api-key>
+   export NODE_TLS_REJECT_UNAUTHORIZED=0   # only for self-signed certs
+   opencode
+   ```
+
+   Any other OpenAI-compatible client works with the same base URL, API key, and model ID `devstral-small-2`.
 
 6. **Validate** the deployment:
    ```bash
