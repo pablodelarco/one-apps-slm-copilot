@@ -43,7 +43,7 @@ Client --> :8443 (LiteLLM proxy, TLS + auth)
 
 LiteLLM picks a backend using "least-busy" routing, forwards the request, and streams the response back. The client sees a single endpoint.
 
-**Why load balance?** A single llama-server on CPU takes 30-60+ seconds per response with a 24B model. With LB you can scale horizontally (3-5 VMs = 3-5 developers served simultaneously), use one endpoint, get automatic failover (30s cooldown after 2 consecutive failures), and distribute across datacenters.
+**Why load balance?** A single llama-server on CPU can take 10-60+ seconds per response with a 24B model depending on output length. With LB you can scale horizontally (3-5 VMs = 3-5 developers served simultaneously), use one endpoint, get automatic failover (30s cooldown after 2 consecutive failures), and distribute across datacenters.
 
 **Components:**
 
