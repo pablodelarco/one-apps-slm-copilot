@@ -448,6 +448,10 @@ service_bootstrap() {
         # Standalone mode: disable proxy if it was enabled in a previous LB boot
         systemctl stop slm-copilot-proxy.service 2>/dev/null || true
         systemctl disable slm-copilot-proxy.service 2>/dev/null || true
+        # Restart llama-server so it picks up the new env (0.0.0.0:8443 + TLS)
+        # Without this, a still-running LB-mode process on 127.0.0.1:8444 makes
+        # the later `systemctl start` a no-op, leaving :8443 unserved.
+        systemctl stop slm-copilot.service 2>/dev/null || true
     fi
 
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
