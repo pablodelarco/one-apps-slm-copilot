@@ -45,8 +45,6 @@ LiteLLM picks a backend using "least-busy" routing, forwards the request, and st
 
 **Why load balance?** A single llama-server on CPU can take 10-60+ seconds per response with a 24B model depending on output length. With LB you can scale horizontally (3-5 VMs = 3-5 developers served simultaneously), use one endpoint, get automatic failover (30s cooldown after 2 consecutive failures), and distribute across datacenters.
 
-**Why LiteLLM over Paddler?** [Paddler](https://github.com/distantmagic/paddler) is a load balancer purpose-built for llama.cpp, but it requires deploying a Paddler agent on every backend node to report slot availability. That breaks the SLM-Copilot appliance model where each VM is self-contained. With LiteLLM, remote backends are plain SLM-Copilot VMs -- no agent, no sidecar, no modification. You just point the LB at their existing HTTPS API using the API password they already have. Zero-touch on remotes.
-
 **Components:**
 
 - **llama-server** -- llama.cpp inference server with native TLS, API key auth, CORS, and Prometheus metrics. Compiled with GGML\_CPU\_ALL\_VARIANTS for automatic SIMD detection. Listens on port 8443 (standalone) or 127.0.0.1:8444 (LB mode).
