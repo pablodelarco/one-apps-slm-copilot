@@ -137,9 +137,7 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
          }
        }
      },
-     "model": {
-       "default": "slm-copilot/devstral-small-2"
-     }
+     "model": "slm-copilot/devstral-small-2"
    }
    ```
    Then set your API key and run:
