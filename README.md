@@ -44,6 +44,7 @@ Set these in the VM template before booting (all optional, re-read on every rebo
 | `ONEAPP_COPILOT_CONTEXT_SIZE` | `32768` | Token context window (512-131072) |
 | `ONEAPP_COPILOT_THREADS` | `0` | CPU threads for inference (`0` = all cores) |
 | `ONEAPP_COPILOT_MODEL` | `devstral` | `devstral` (built-in) or a direct GGUF URL from Hugging Face |
+| `ONEAPP_COPILOT_LB_BACKENDS` | *(empty)* | Load balancer backends (`key@host:port`, comma-separated). Empty = standalone |
 
 ## Troubleshooting
 

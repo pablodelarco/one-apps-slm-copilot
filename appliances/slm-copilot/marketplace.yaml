@@ -39,6 +39,7 @@ description: |-
   - Fully configurable via OpenNebula context variables
   - Report file with connection details and Cline setup guide
   - Idempotent reconfiguration on every boot
+  - Optional LiteLLM load balancing across multiple VMs for team use
 short_description: >-
   Sovereign AI coding copilot (Devstral Small 2 24B on CPU via llama.cpp).
   No GPU required. European open-source. One-click deployment.
@@ -69,6 +70,7 @@ opennebula_template:
     ONEAPP_COPILOT_CPU_THREADS: '0'
     ONEAPP_COPILOT_API_PASSWORD: ''
     ONEAPP_COPILOT_TLS_DOMAIN: ''
+    ONEAPP_COPILOT_LB_BACKENDS: ''
   CPU: '16'
   CPU_MODEL:
     MODEL: host-passthrough
@@ -85,7 +87,8 @@ opennebula_template:
     ONEAPP_COPILOT_CONTEXT_SIZE,
     ONEAPP_COPILOT_CPU_THREADS,
     ONEAPP_COPILOT_API_PASSWORD,
-    ONEAPP_COPILOT_TLS_DOMAIN
+    ONEAPP_COPILOT_TLS_DOMAIN,
+    ONEAPP_COPILOT_LB_BACKENDS
   user_inputs:
     oneapp_copilot_ai_model: >-
       M|list|AI Model|Devstral Small 24B (built-in),Codestral 22B,Mistral Nemo
@@ -98,6 +101,8 @@ opennebula_template:
       O|password|API Key (empty = auto-generate)||
     oneapp_copilot_tls_domain: >-
       O|text|Domain for Let's Encrypt (empty = self-signed)||
+    oneapp_copilot_lb_backends: >-
+      O|text|Load Balancer backends (key@host:port, comma-separated, empty = standalone)||
 logo: slm-copilot.png
 images:
   - name: slm_copilot_os

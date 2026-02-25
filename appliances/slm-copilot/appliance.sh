@@ -32,6 +32,7 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_API_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
     'ONEAPP_COPILOT_TLS_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
     'ONEAPP_COPILOT_CPU_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
+    'ONEAPP_COPILOT_LB_BACKENDS'       'configure' 'Remote backends for load balancing (empty=standalone)' ''
 )
 
 # --------------------------------------------------------------------------
@@ -42,6 +43,7 @@ ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-32768}"
 ONEAPP_COPILOT_API_PASSWORD="${ONEAPP_COPILOT_API_PASSWORD:-}"
 ONEAPP_COPILOT_TLS_DOMAIN="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
 ONEAPP_COPILOT_CPU_THREADS="${ONEAPP_COPILOT_CPU_THREADS:-0}"
+ONEAPP_COPILOT_LB_BACKENDS="${ONEAPP_COPILOT_LB_BACKENDS:-}"
 
 # --------------------------------------------------------------------------
 # Constants
@@ -55,6 +57,10 @@ readonly LLAMA_BIN="/usr/local/bin/llama-server"
 readonly LLAMA_SYSTEMD_UNIT="/etc/systemd/system/slm-copilot.service"
 readonly LLAMA_ENV_FILE="/etc/slm-copilot/env"
 readonly COPILOT_LOG="/var/log/one-appliance/slm-copilot.log"
+readonly LITELLM_CONFIG="/etc/slm-copilot/litellm-config.yaml"
+readonly LITELLM_SYSTEMD_UNIT="/etc/systemd/system/slm-copilot-proxy.service"
+readonly LITELLM_PORT=8443
+readonly LLAMA_PORT_LOCAL=8444
 
 # Built-in model (baked into image at install time)
 readonly BUILTIN_MODEL_GGUF="Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf"
@@ -93,6 +99,13 @@ log_copilot() {
     _timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     echo "${_timestamp} [${_level^^}] ${_message}" >> "${COPILOT_LOG}"
     msg "${_level}" "${_message}"
+}
+
+# ==========================================================================
+#  HELPER: is_lb_mode  (true when LiteLLM load balancing is configured)
+# ==========================================================================
+is_lb_mode() {
+    [ -n "${ONEAPP_COPILOT_LB_BACKENDS:-}" ]
 }
 
 # ==========================================================================
@@ -144,8 +157,11 @@ write_report_file() {
     fi
 
     # Query live service status
-    local _llama_status
+    local _llama_status _proxy_status=""
     _llama_status=$(systemctl is-active slm-copilot 2>/dev/null || echo unknown)
+    if is_lb_mode; then
+        _proxy_status=$(systemctl is-active slm-copilot-proxy 2>/dev/null || echo unknown)
+    fi
 
     # Write INI-style report to framework-defined path (defensive fallback)
     local _report="${ONE_SERVICE_REPORT:-/etc/one-appliance/config}"
@@ -164,7 +180,7 @@ context_size = ${ONEAPP_COPILOT_CONTEXT_SIZE}
 threads      = ${ONEAPP_COPILOT_CPU_THREADS}
 
 [Service status]
-llama-server = ${_llama_status}
+llama-server = ${_llama_status}$(is_lb_mode && printf '\nlitellm-proxy = %s' "${_proxy_status}")
 tls          = ${_tls_mode}
 
 [Cline VS Code setup]
@@ -189,6 +205,20 @@ curl -k -H "Authorization: Bearer ${_password}" ${_endpoint}/v1/chat/completions
   -H 'Content-Type: application/json' \\
   -d '{"model":"${ACTIVE_MODEL_ID}","messages":[{"role":"user","content":"Hello"}]}'
 EOF
+
+    # Append LB section if in load balancer mode
+    if is_lb_mode; then
+        local _n_remotes
+        _n_remotes=$(echo "${ONEAPP_COPILOT_LB_BACKENDS}" | tr ',' '\n' | grep -c '[^[:space:]]')
+        cat >> "${_report}" <<EOF
+
+[Load Balancer]
+mode            = litellm (least-busy routing)
+local_backend   = http://127.0.0.1:${LLAMA_PORT_LOCAL}
+remote_backends = ${_n_remotes}
+config          = ${LITELLM_CONFIG}
+EOF
+    fi
 
     chmod 600 "${_report}"
     log_copilot info "Report file written to ${_report}"
@@ -239,8 +269,29 @@ service_install() {
     curl -fSL --progress-bar -o "${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}" "${_model_url}"
     log_copilot info "Model downloaded to ${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}"
 
-    # 5. Create systemd unit file
+    # 5. Create wrapper script (handles conditional TLS for standalone vs LB mode)
     mkdir -p /etc/slm-copilot
+    cat > /usr/local/bin/slm-copilot-start.sh <<'WRAPPER_EOF'
+#!/bin/bash
+source /etc/slm-copilot/env
+ARGS=(
+    --host "${LLAMA_HOST}"
+    --port "${LLAMA_PORT}"
+    --model "${LLAMA_MODEL}"
+    --ctx-size "${LLAMA_CTX_SIZE}"
+    --threads "${LLAMA_THREADS}"
+    --flash-attn on
+    --mlock
+    --metrics
+    --prio 2
+    --api-key "${LLAMA_API_KEY}"
+)
+[ -n "${LLAMA_SSL_KEY}" ] && ARGS+=(--ssl-key-file "${LLAMA_SSL_KEY}" --ssl-cert-file "${LLAMA_SSL_CERT}")
+exec /usr/local/bin/llama-server "${ARGS[@]}"
+WRAPPER_EOF
+    chmod +x /usr/local/bin/slm-copilot-start.sh
+
+    # 6. Create systemd unit file (delegates to wrapper script)
     cat > "${LLAMA_SYSTEMD_UNIT}" <<'UNIT_EOF'
 [Unit]
 Description=SLM-Copilot AI Coding Assistant (llama-server)
@@ -249,20 +300,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/slm-copilot/env
-ExecStart=/usr/local/bin/llama-server \
-  --host ${LLAMA_HOST} \
-  --port ${LLAMA_PORT} \
-  --model ${LLAMA_MODEL} \
-  --ctx-size ${LLAMA_CTX_SIZE} \
-  --threads ${LLAMA_THREADS} \
-  --flash-attn on \
-  --mlock \
-  --metrics \
-  --prio 2 \
-  --ssl-key-file ${LLAMA_SSL_KEY} \
-  --ssl-cert-file ${LLAMA_SSL_CERT} \
-  --api-key ${LLAMA_API_KEY}
+ExecStart=/usr/local/bin/slm-copilot-start.sh
 Restart=on-failure
 RestartSec=5
 LimitMEMLOCK=infinity
@@ -272,7 +310,37 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 UNIT_EOF
 
-    # 6. Verify model file integrity (check file size is reasonable)
+    # 7. Install LiteLLM proxy (optional load balancer, activated by ONEAPP_COPILOT_LB_BACKENDS)
+    apt-get install -y -qq python3-pip python3-venv >/dev/null
+    python3 -m venv /opt/litellm
+    /opt/litellm/bin/pip install 'litellm[proxy]' --quiet
+    /opt/litellm/bin/pip cache purge >/dev/null 2>&1 || true
+
+    # Create systemd unit for LiteLLM proxy
+    cat > "${LITELLM_SYSTEMD_UNIT}" <<'UNIT_EOF'
+[Unit]
+Description=SLM-Copilot LiteLLM Load Balancer
+After=network-online.target slm-copilot.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/slm-copilot/env
+ExecStart=/opt/litellm/bin/litellm \
+  --config /etc/slm-copilot/litellm-config.yaml \
+  --port 8443 \
+  --num_workers 2 \
+  --ssl_keyfile_path ${SLM_SSL_KEY} \
+  --ssl_certfile_path ${SLM_SSL_CERT}
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+UNIT_EOF
+
+    # 8. Verify model file integrity (check file size is reasonable)
     local _model_size
     _model_size=$(stat -c%s "${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}" 2>/dev/null || echo 0)
     if [ "${_model_size}" -lt 1000000000 ]; then
@@ -283,14 +351,14 @@ UNIT_EOF
 
     systemctl daemon-reload
 
-    # 8. Clean up build dependencies to reduce image size
+    # 9. Clean up build dependencies to reduce image size
     rm -rf "${_build_dir}"
     apt-get purge -y build-essential cmake libcurl4-openssl-dev >/dev/null 2>&1 || true
     apt-get autoremove -y --purge >/dev/null 2>&1 || true
     apt-get clean -y
     rm -rf /var/lib/apt/lists/*
 
-    # 9. Install SSH login banner
+    # 10. Install SSH login banner
     cat > /etc/profile.d/slm-copilot-banner.sh <<'BANNER_EOF'
 #!/bin/bash
 [[ $- == *i* ]] || return
@@ -350,7 +418,12 @@ service_configure() {
     # 6. Write llama-server environment file
     generate_llama_env
 
-    # 7. Reload systemd to pick up any env file changes
+    # 7. Generate LiteLLM config if load balancing is enabled
+    if is_lb_mode; then
+        generate_litellm_config
+    fi
+
+    # 8. Reload systemd to pick up any env file changes
     systemctl daemon-reload
 
     log_copilot info "SLM-Copilot configuration complete"
@@ -367,6 +440,20 @@ service_bootstrap() {
     # 0. Load model info persisted by service_configure
     _load_model_info
 
+    # 0b. Clean up services from previous mode (handles standalone <-> LB switching)
+    if is_lb_mode; then
+        # LB mode: llama-server must not be on :8443 from a previous standalone boot
+        systemctl stop slm-copilot.service 2>/dev/null || true
+    else
+        # Standalone mode: disable proxy if it was enabled in a previous LB boot
+        systemctl stop slm-copilot-proxy.service 2>/dev/null || true
+        systemctl disable slm-copilot-proxy.service 2>/dev/null || true
+        # Restart llama-server so it picks up the new env (0.0.0.0:8443 + TLS)
+        # Without this, a still-running LB-mode process on 127.0.0.1:8444 makes
+        # the later `systemctl start` a no-op, leaving :8443 unserved.
+        systemctl stop slm-copilot.service 2>/dev/null || true
+    fi
+
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
     attempt_letsencrypt
 
@@ -374,13 +461,28 @@ service_bootstrap() {
     systemctl enable slm-copilot.service
     systemctl start slm-copilot.service
 
-    # 3. Wait for readiness
-    wait_for_llama
+    # 3. Wait for llama-server readiness (port depends on mode)
+    if is_lb_mode; then
+        wait_for_llama_local
+    else
+        wait_for_llama
+    fi
 
-    # 4. Write report file with connection info, credentials, Cline config
+    # 4. Start LiteLLM proxy if in LB mode
+    if is_lb_mode; then
+        systemctl enable slm-copilot-proxy.service
+        systemctl start slm-copilot-proxy.service
+        wait_for_litellm
+    fi
+
+    # 5. Write report file with connection info, credentials, Cline config
     write_report_file
 
-    log_copilot info "SLM-Copilot bootstrap complete -- llama-server on 0.0.0.0:${LLAMA_PORT}"
+    if is_lb_mode; then
+        log_copilot info "SLM-Copilot bootstrap complete -- LiteLLM proxy on 0.0.0.0:${LITELLM_PORT}, llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL}"
+    else
+        log_copilot info "SLM-Copilot bootstrap complete -- llama-server on 0.0.0.0:${LLAMA_PORT}"
+    fi
 }
 
 # ==========================================================================
@@ -416,6 +518,9 @@ Configuration variables (set via OpenNebula context):
                                 If empty, self-signed certificate is used
   ONEAPP_COPILOT_CPU_THREADS        CPU threads for inference (default: 0 = auto-detect)
                                 Set to number of physical cores for best performance
+  ONEAPP_COPILOT_LB_BACKENDS        Remote backends for load balancing (default: empty)
+                                Format: key@host:port,key@host:port (empty = standalone)
+                                Activates LiteLLM proxy on :8443, llama-server moves to :8444
 
 Ports:
   8443  HTTPS API (TLS + Bearer token auth + Prometheus metrics)
@@ -424,12 +529,15 @@ Service management:
   systemctl status slm-copilot        Check inference server status
   systemctl restart slm-copilot       Restart the inference server
   journalctl -u slm-copilot -f        Follow inference server logs
+  systemctl status slm-copilot-proxy  Check LiteLLM proxy (LB mode only)
+  journalctl -u slm-copilot-proxy -f  Follow proxy logs (LB mode only)
 
 Configuration files:
   /etc/slm-copilot/env                            Environment file (llama-server config)
   /etc/ssl/slm-copilot/cert.pem                   TLS certificate (symlink)
   /etc/ssl/slm-copilot/key.pem                    TLS private key (symlink)
   /opt/models/                                     Model GGUF file(s)
+  /etc/slm-copilot/litellm-config.yaml             LiteLLM config (LB mode only)
 
 Report and logs:
   /etc/one-appliance/config                    Service report (credentials, Cline config)
@@ -627,17 +735,32 @@ generate_llama_env() {
         log_copilot info "Auto-detected ${_threads} CPU threads"
     fi
 
+    local _host="0.0.0.0"
+    local _port="${LLAMA_PORT}"
+    local _ssl_key="${LLAMA_CERT_DIR}/key.pem"
+    local _ssl_cert="${LLAMA_CERT_DIR}/cert.pem"
+
+    if is_lb_mode; then
+        _host="127.0.0.1"
+        _port="${LLAMA_PORT_LOCAL}"
+        _ssl_key=""
+        _ssl_cert=""
+        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS)"
+    fi
+
     mkdir -p /etc/slm-copilot
 
     cat > "${LLAMA_ENV_FILE}" <<EOF
-LLAMA_HOST=0.0.0.0
-LLAMA_PORT=${LLAMA_PORT}
+LLAMA_HOST=${_host}
+LLAMA_PORT=${_port}
 LLAMA_MODEL=${ACTIVE_MODEL_PATH}
 LLAMA_CTX_SIZE=${ONEAPP_COPILOT_CONTEXT_SIZE}
 LLAMA_THREADS=${_threads}
-LLAMA_SSL_KEY=${LLAMA_CERT_DIR}/key.pem
-LLAMA_SSL_CERT=${LLAMA_CERT_DIR}/cert.pem
+LLAMA_SSL_KEY=${_ssl_key}
+LLAMA_SSL_CERT=${_ssl_cert}
 LLAMA_API_KEY=${_password}
+SLM_SSL_KEY=${LLAMA_CERT_DIR}/key.pem
+SLM_SSL_CERT=${LLAMA_CERT_DIR}/cert.pem
 EOF
     chmod 0600 "${LLAMA_ENV_FILE}"
 
@@ -663,6 +786,105 @@ wait_for_llama() {
 }
 
 # ==========================================================================
+#  HELPER: wait_for_llama_local  (poll HTTP health, LB mode only)
+# ==========================================================================
+wait_for_llama_local() {
+    local _timeout=300 _elapsed=0
+    log_copilot info "Waiting for local llama-server on :${LLAMA_PORT_LOCAL}"
+    while ! curl -sf "http://127.0.0.1:${LLAMA_PORT_LOCAL}/health" >/dev/null 2>&1; do
+        sleep 5
+        _elapsed=$((_elapsed + 5))
+        if [ "${_elapsed}" -ge "${_timeout}" ]; then
+            log_copilot error "llama-server not ready after ${_timeout}s"
+            exit 1
+        fi
+    done
+    log_copilot info "Local llama-server ready (${_elapsed}s)"
+}
+
+# ==========================================================================
+#  HELPER: wait_for_litellm  (poll HTTPS health, LB mode only)
+# ==========================================================================
+wait_for_litellm() {
+    local _timeout=60 _elapsed=0
+    log_copilot info "Waiting for LiteLLM proxy on :${LITELLM_PORT}"
+    while ! curl -sfk "https://127.0.0.1:${LITELLM_PORT}/health/liveliness" >/dev/null 2>&1; do
+        sleep 3
+        _elapsed=$((_elapsed + 3))
+        if [ "${_elapsed}" -ge "${_timeout}" ]; then
+            log_copilot error "LiteLLM proxy not ready after ${_timeout}s"
+            exit 1
+        fi
+    done
+    log_copilot info "LiteLLM proxy ready (${_elapsed}s)"
+}
+
+# ==========================================================================
+#  HELPER: generate_litellm_config  (LiteLLM YAML for load balancing)
+# ==========================================================================
+generate_litellm_config() {
+    local _local_password
+    _local_password=$(cat "${LLAMA_DATA_DIR}/password" 2>/dev/null || echo 'changeme')
+
+    # Start config with local backend (always included)
+    cat > "${LITELLM_CONFIG}" <<EOF
+model_list:
+  - model_name: "${ACTIVE_MODEL_ID}"
+    litellm_params:
+      model: "openai/${ACTIVE_MODEL_ID}"
+      api_base: "http://127.0.0.1:${LLAMA_PORT_LOCAL}/v1"
+      api_key: "${_local_password}"
+EOF
+
+    # Parse remote backends: "key@host:port,key@host:port" or "host:port,host:port"
+    local _backends="${ONEAPP_COPILOT_LB_BACKENDS}"
+    local _entries _entry _key _url _i=0
+    IFS=',' read -ra _entries <<< "${_backends}"
+    for _entry in "${_entries[@]}"; do
+        _entry=$(echo "${_entry}" | xargs)  # trim whitespace
+        [ -z "${_entry}" ] && continue
+
+        _key="${_local_password}"
+        _url="${_entry}"
+        if [[ "${_entry}" == *@* ]]; then
+            _key="${_entry%%@*}"
+            _url="${_entry#*@}"
+        fi
+        # Ensure URL has scheme
+        if [[ "${_url}" != https://* ]] && [[ "${_url}" != http://* ]]; then
+            _url="https://${_url}"
+        fi
+
+        cat >> "${LITELLM_CONFIG}" <<EOF
+  - model_name: "${ACTIVE_MODEL_ID}"
+    litellm_params:
+      model: "openai/${ACTIVE_MODEL_ID}"
+      api_base: "${_url}/v1"
+      api_key: "${_key}"
+EOF
+        _i=$((_i + 1))
+    done
+
+    # Append router and general settings
+    cat >> "${LITELLM_CONFIG}" <<EOF
+
+router_settings:
+  routing_strategy: "least-busy"
+  allowed_fails: 2
+  cooldown_time: 30
+
+litellm_settings:
+  ssl_verify: false
+
+general_settings:
+  master_key: "${_local_password}"
+EOF
+
+    chmod 0600 "${LITELLM_CONFIG}"
+    log_copilot info "LiteLLM config generated: 1 local + ${_i} remote backend(s)"
+}
+
+# ==========================================================================
 #  HELPER: smoke_test  (verify chat completions, streaming, and health)
 # ==========================================================================
 smoke_test() {
@@ -679,11 +901,13 @@ smoke_test() {
     log_copilot info "Smoke test: health check OK"
 
     # Test 2: Non-streaming chat completion
+    local _model_id
+    _model_id=$(cat "${LLAMA_DATA_DIR}/model_id" 2>/dev/null || echo "devstral-small-2")
     local _response
     _response=$(curl -sfk "${_endpoint}/v1/chat/completions" \
         -H "Authorization: Bearer ${_api_key}" \
         -H 'Content-Type: application/json' \
-        -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Write a Python hello world"}],"max_tokens":50}') || {
+        -d "{\"model\":\"${_model_id}\",\"messages\":[{\"role\":\"user\",\"content\":\"Write a Python hello world\"}],\"max_tokens\":50}") || {
         log_copilot error "Smoke test: chat completion request failed"
         return 1
     }
@@ -697,7 +921,7 @@ smoke_test() {
     curl -sfk "${_endpoint}/v1/chat/completions" \
         -H "Authorization: Bearer ${_api_key}" \
         -H 'Content-Type: application/json' \
-        -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"Say hello"}],"max_tokens":10,"stream":true}' \
+        -d "{\"model\":\"${_model_id}\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello\"}],\"max_tokens\":10,\"stream\":true}" \
         | grep -q 'data:' || {
         log_copilot error "Smoke test: streaming response has no SSE data lines"
         return 1
@@ -740,6 +964,8 @@ attempt_letsencrypt() {
         cat > /etc/letsencrypt/renewal-hooks/deploy/slm-copilot-restart.sh <<'HOOK'
 #!/bin/bash
 systemctl restart slm-copilot
+# Also restart LiteLLM proxy if active (LB mode uses TLS on the proxy)
+systemctl is-active --quiet slm-copilot-proxy && systemctl restart slm-copilot-proxy
 HOOK
         chmod +x /etc/letsencrypt/renewal-hooks/deploy/slm-copilot-restart.sh
     else
