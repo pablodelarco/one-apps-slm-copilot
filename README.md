@@ -61,6 +61,38 @@ LiteLLM picks a backend using "least-busy" routing, forwards the request, and st
 
 > **Important:** The VM template must use `host-passthrough` CPU model so that AVX2/AVX-512 instructions are exposed to the guest. Without this, llama.cpp inference will hang.
 
+### Example VM template
+
+If importing from the marketplace, the template is created automatically. For manual setup or customization, here's the OpenNebula template:
+
+```
+CPU     = "16"
+MEMORY  = "32768"
+VCPU    = "16"
+
+CPU_MODEL = [ MODEL = "host-passthrough" ]
+
+CONTEXT = [
+    NETWORK                        = "YES",
+    SSH_PUBLIC_KEY                  = "$USER[SSH_PUBLIC_KEY]",
+    ONEAPP_COPILOT_AI_MODEL        = "Devstral Small 24B (built-in)",
+    ONEAPP_COPILOT_CONTEXT_SIZE    = "32768",
+    ONEAPP_COPILOT_CPU_THREADS     = "0",
+    ONEAPP_COPILOT_API_PASSWORD    = "",
+    ONEAPP_COPILOT_TLS_DOMAIN      = "",
+    ONEAPP_COPILOT_LB_BACKENDS     = ""
+]
+
+DISK = [ IMAGE = "SLM-Copilot" ]
+
+NIC = [ NETWORK = "your-network" ]
+NIC_DEFAULT = [ MODEL = "virtio" ]
+
+GRAPHICS = [ LISTEN = "0.0.0.0", TYPE = "VNC" ]
+```
+
+Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPILOT_LB_BACKENDS` only if using [load balancing](#load-balancing-across-zones).
+
 ### Steps
 
 1. **Import** the appliance from the OpenNebula marketplace (or build from source with `make build`)
