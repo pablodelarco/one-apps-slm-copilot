@@ -57,6 +57,111 @@ ONEAPP_COPILOT_LB_BACKENDS=sk-abc@madrid-vm2:8443,sk-xyz@paris-vm1:8443
 
 Now 3 backends serve requests (1 local + 2 remote), and the team gets ~3x throughput from a single API endpoint.
 
+### Multi-zone federation (scaling across bare metals)
+
+SLM-Copilot's load balancing works across OpenNebula [federated zones](https://docs.opennebula.io/7.0/product/control_plane_configuration/data_center_federation/config/), allowing you to build a distributed AI coding assistant that spans multiple bare metal servers in different locations.
+
+**Architecture example — 3 zones:**
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │            OpenNebula Federation         │
+                    │         (shared user DB, SSO, ACLs)      │
+                    └────────┬──────────────┬─────────────┬────┘
+                             │              │             │
+                ┌────────────┴──┐  ┌────────┴────────┐  ┌─┴────────────┐
+                │  Zone: Madrid │  │  Zone: Paris    │  │  Zone: Berlin │
+                │  oned + hosts │  │  oned + hosts   │  │  oned + hosts │
+                └──────┬────────┘  └──────┬──────────┘  └──────┬────────┘
+                       │                  │                    │
+              ┌────────┴────────┐  ┌──────┴──────┐    ┌───────┴───────┐
+              │  VM: LB + local │  │ VM: backend │    │ VM: backend   │
+              │  (LiteLLM)      │  │ standalone   │    │ standalone    │
+              │  :8443 ◄──┐     │  │ :8443        │    │ :8443         │
+              │            │    │  │              │    │               │
+              │  llama-svr │    │  │ llama-server │    │ llama-server  │
+              │  :8444     │    │  │ Devstral 24B │    │ Devstral 24B  │
+              └────────────┘    │  └──────────────┘    └───────────────┘
+                                │         ▲                    ▲
+                                └─────────┴────────────────────┘
+                              LiteLLM routes to all backends
+                              (least-busy, auto-failover)
+
+Developers ──HTTPS──► Madrid VM :8443 (single endpoint)
+```
+
+**Step-by-step setup:**
+
+**1. Deploy standalone SLM-Copilot VMs in each zone**
+
+In each OpenNebula zone, instantiate a standard SLM-Copilot VM from the marketplace. Do not set `ONEAPP_COPILOT_LB_BACKENDS` — these are plain backends. Note the API password and IP of each:
+
+| Zone | VM IP | API Password |
+|------|-------|-------------|
+| Paris | 100.64.1.10 | `sk-paris-secret` |
+| Berlin | 100.64.1.20 | `sk-berlin-secret` |
+
+The API password is the value of `ONEAPP_COPILOT_API_PASSWORD` on each VM. If you didn't set one explicitly, it was auto-generated on first boot — retrieve it with `cat /etc/one-appliance/config` on the VM.
+
+**2. Ensure network reachability between zones**
+
+All backend VMs must be reachable from the LB VM on port 8443 (HTTPS). Options:
+
+- **Tailscale** (recommended): Install Tailscale on each VM for automatic mesh networking with no firewall changes. Use the Tailscale IPs (100.x.y.z) in the backends list.
+- **WireGuard**: Manual point-to-point tunnels between sites.
+- **Public IPs**: If VMs have public IPs and port 8443 is open. Use Let's Encrypt (`ONEAPP_COPILOT_TLS_DOMAIN`) for trusted TLS in this case.
+- **VPN / private network**: Any L3 connectivity that allows TCP on port 8443.
+
+Verify connectivity from the future LB VM: `curl -sk https://100.64.1.10:8443/health` should return `{"status":"ok"}`.
+
+**3. Deploy the LB VM in the primary zone**
+
+In your primary zone (e.g., Madrid), create a new SLM-Copilot VM with `ONEAPP_COPILOT_LB_BACKENDS` pointing at the remote VMs:
+
+```
+ONEAPP_COPILOT_LB_BACKENDS=sk-paris-secret@100.64.1.10:8443,sk-berlin-secret@100.64.1.20:8443
+```
+
+The format is `<api_password>@<host>:<port>` — each `api_password` is the `ONEAPP_COPILOT_API_PASSWORD` of the corresponding remote VM.
+
+The LB VM boots with LiteLLM on :8443, its own llama-server on :8444 (as a local backend), plus the two remote backends. Three backends total, one endpoint.
+
+**4. Give developers the LB VM's endpoint**
+
+Developers configure their client (Cline, Continue, etc.) with:
+
+- **Base URL:** `https://<lb-vm-ip>:8443/v1`
+- **API Key:** The LB VM's `ONEAPP_COPILOT_API_PASSWORD`
+- **Model ID:** `devstral-small-2`
+
+They don't need to know about the backends.
+
+**5. Verify the LB is routing to all backends**
+
+```bash
+# On the LB VM:
+curl -sk https://127.0.0.1:8443/health/liveliness
+# Returns: "I'm alive!"
+
+# Check LiteLLM logs for backend routing:
+journalctl -u slm-copilot-proxy -f
+
+# Send a test request and watch which backend handles it:
+curl -sk -H "Authorization: Bearer <lb-api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"devstral-small-2","messages":[{"role":"user","content":"hello"}],"max_tokens":10}' \
+  https://127.0.0.1:8443/v1/chat/completions
+```
+
+**Scaling cheat sheet:**
+
+| Team size | Backend VMs | LB_BACKENDS value |
+|-----------|------------|-------------------|
+| 1-2 devs | 1 VM (standalone, no LB) | *(empty)* |
+| 3-5 devs | 2-3 VMs | `key1@host1:8443,key2@host2:8443` |
+| 5-10 devs | 4-5 VMs | `key1@host1:8443,key2@host2:8443,key3@host3:8443,key4@host4:8443` |
+| 10+ devs | 5+ VMs, consider two LB endpoints | Split across two LB VMs for redundancy |
+
 **Components:**
 
 - **llama-server** -- llama.cpp inference server with native TLS, API key authentication, CORS support, and Prometheus metrics. Compiled with GGML\_CPU\_ALL\_VARIANTS for automatic SIMD detection (SSE3/AVX/AVX2/AVX-512). Listens on port 8443 (standalone) or 127.0.0.1:8444 (LB mode).
