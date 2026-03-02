@@ -213,6 +213,7 @@ mode            = litellm (least-busy routing)
 local_backend   = http://127.0.0.1:${LLAMA_PORT_LOCAL}
 remote_backends = ${_n_remotes}
 config          = ${LITELLM_CONFIG}
+web_ui          = https://${_endpoint}:${LLAMA_PORT}/ui
 EOF
     fi
 
@@ -871,9 +872,11 @@ router_settings:
 
 litellm_settings:
   ssl_verify: false
+  default_model: "${ACTIVE_MODEL_ID}"
 
 general_settings:
   master_key: "${_local_password}"
+  database_url: "sqlite:////var/lib/slm-copilot/litellm.db"
 EOF
 
     chmod 0600 "${LITELLM_CONFIG}"
