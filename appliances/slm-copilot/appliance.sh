@@ -159,7 +159,9 @@ write_report_file() {
     # Query live service status
     local _llama_status _proxy_status=""
     _llama_status=$(systemctl is-active slm-copilot 2>/dev/null || echo unknown)
-    _proxy_status=$(systemctl is-active slm-copilot-proxy 2>/dev/null || echo unknown)
+    if is_lb_mode; then
+        _proxy_status=$(systemctl is-active slm-copilot-proxy 2>/dev/null || echo unknown)
+    fi
 
     # Write INI-style report to framework-defined path (defensive fallback)
     local _report="${ONE_SERVICE_REPORT:-/etc/one-appliance/config}"
@@ -178,8 +180,7 @@ context_size = ${ONEAPP_COPILOT_CONTEXT_SIZE}
 threads      = ${ONEAPP_COPILOT_CPU_THREADS}
 
 [Service status]
-llama-server    = ${_llama_status}
-litellm-proxy   = ${_proxy_status}
+llama-server = ${_llama_status}$(is_lb_mode && printf '\nlitellm-proxy = %s' "${_proxy_status}")
 tls          = ${_tls_mode}
 
 [aider setup]
@@ -413,8 +414,10 @@ service_configure() {
     # 6. Write llama-server environment file
     generate_llama_env
 
-    # 7. Generate LiteLLM config (always -- provides web UI + OpenAI-compatible proxy)
-    generate_litellm_config
+    # 7. Generate LiteLLM config if load balancing is enabled
+    if is_lb_mode; then
+        generate_litellm_config
+    fi
 
     # 8. Reload systemd to pick up any env file changes
     systemctl daemon-reload
@@ -433,9 +436,19 @@ service_bootstrap() {
     # 0. Load model info persisted by service_configure
     _load_model_info
 
-    # 0b. Clean stop of both services so they pick up fresh env/config
-    systemctl stop slm-copilot-proxy.service 2>/dev/null || true
-    systemctl stop slm-copilot.service 2>/dev/null || true
+    # 0b. Clean up services from previous mode (handles standalone <-> LB switching)
+    if is_lb_mode; then
+        # LB mode: llama-server must not be on :8443 from a previous standalone boot
+        systemctl stop slm-copilot.service 2>/dev/null || true
+    else
+        # Standalone mode: disable proxy if it was enabled in a previous LB boot
+        systemctl stop slm-copilot-proxy.service 2>/dev/null || true
+        systemctl disable slm-copilot-proxy.service 2>/dev/null || true
+        # Restart llama-server so it picks up the new env (0.0.0.0:8443 + TLS)
+        # Without this, a still-running LB-mode process on 127.0.0.1:8444 makes
+        # the later `systemctl start` a no-op, leaving :8443 unserved.
+        systemctl stop slm-copilot.service 2>/dev/null || true
+    fi
 
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
     attempt_letsencrypt
@@ -444,21 +457,27 @@ service_bootstrap() {
     systemctl enable slm-copilot.service
     systemctl start slm-copilot.service
 
-    # 3. Wait for llama-server readiness on local port
-    wait_for_llama_local
+    # 3. Wait for llama-server readiness (port depends on mode)
+    if is_lb_mode; then
+        wait_for_llama_local
+    else
+        wait_for_llama
+    fi
 
-    # 4. Start LiteLLM proxy (always -- provides web UI + TLS termination)
-    systemctl enable slm-copilot-proxy.service
-    systemctl start slm-copilot-proxy.service
-    wait_for_litellm
+    # 4. Start LiteLLM proxy if in LB mode
+    if is_lb_mode; then
+        systemctl enable slm-copilot-proxy.service
+        systemctl start slm-copilot-proxy.service
+        wait_for_litellm
+    fi
 
     # 5. Write report file with connection info, credentials, client config
     write_report_file
 
     if is_lb_mode; then
-        log_copilot info "SLM-Copilot bootstrap complete -- LiteLLM proxy on 0.0.0.0:${LITELLM_PORT}, llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (LB mode)"
+        log_copilot info "SLM-Copilot bootstrap complete -- LiteLLM proxy on 0.0.0.0:${LITELLM_PORT}, llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL}"
     else
-        log_copilot info "SLM-Copilot bootstrap complete -- LiteLLM proxy on 0.0.0.0:${LITELLM_PORT}, llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (standalone)"
+        log_copilot info "SLM-Copilot bootstrap complete -- llama-server on 0.0.0.0:${LLAMA_PORT}"
     fi
 }
 
@@ -712,12 +731,18 @@ generate_llama_env() {
         log_copilot info "Auto-detected ${_threads} CPU threads"
     fi
 
-    # llama-server always listens locally; LiteLLM proxy handles TLS + public port
-    local _host="127.0.0.1"
-    local _port="${LLAMA_PORT_LOCAL}"
-    local _ssl_key=""
-    local _ssl_cert=""
-    log_copilot info "llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (LiteLLM proxy on :${LITELLM_PORT})"
+    local _host="0.0.0.0"
+    local _port="${LLAMA_PORT}"
+    local _ssl_key="${LLAMA_CERT_DIR}/key.pem"
+    local _ssl_cert="${LLAMA_CERT_DIR}/cert.pem"
+
+    if is_lb_mode; then
+        _host="127.0.0.1"
+        _port="${LLAMA_PORT_LOCAL}"
+        _ssl_key=""
+        _ssl_cert=""
+        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS)"
+    fi
 
     mkdir -p /etc/slm-copilot
 
