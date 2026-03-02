@@ -154,6 +154,68 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
    make test ENDPOINT=https://<vm-ip>:8443 PASSWORD=<api-key>
    ```
 
+### Accessing the API endpoint
+
+The SLM-Copilot API listens on port **8443** inside the VM. How you reach it depends on your network setup:
+
+**Bridged network (recommended):** The VM gets an IP on the same network as the host. Use the VM's IP directly:
+
+```bash
+curl -sk https://<vm-ip>:8443/health
+```
+
+**NAT network (e.g. virbr0):** The VM gets a private IP (192.168.122.x) that is only reachable from the host. To expose the API, add a port-forwarding rule on the KVM host:
+
+```bash
+# On the KVM host -- forward host:8443 to the VM
+iptables -t nat -A PREROUTING -p tcp --dport 8443 -j DNAT --to-destination <vm-ip>:8443
+iptables -A FORWARD -p tcp -d <vm-ip> --dport 8443 -j ACCEPT
+```
+
+Then use the **host's IP** (or its Tailscale IP) as the endpoint:
+
+```bash
+curl -sk https://<host-ip>:8443/health
+# {"status":"ok"}
+```
+
+For multiple VMs behind the same host, use different host ports (8443, 8444, 8445, ...):
+
+```bash
+iptables -t nat -A PREROUTING -p tcp --dport 8444 -j DNAT --to-destination <second-vm-ip>:8443
+```
+
+**Finding the VM's internal IP:**
+
+```bash
+# From the OpenNebula front-end
+onevm show <vm-id> | grep -A2 "VM NICS"
+
+# From inside the VM
+ip addr show eth0
+```
+
+**Finding the API key:**
+
+```bash
+# SSH into the VM
+cat /etc/one-appliance/config
+
+# Or read it from the env file
+grep LLAMA_API_KEY /etc/slm-copilot/env
+```
+
+**Quick test with chat completions:**
+
+```bash
+curl -sk https://<endpoint>:8443/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <api-key>" \
+  -d '{"model":"devstral","messages":[{"role":"user","content":"Hello"}],"max_tokens":50}'
+```
+
+The server also includes a **built-in web chat UI** -- open `https://<endpoint>:8443` in your browser and enter the API key when prompted.
+
 ## Configuration
 
 All configuration is via OpenNebula context variables, set in the VM template. All are re-read on every boot -- change a value and reboot to apply.
