@@ -158,13 +158,13 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
 
 The SLM-Copilot API listens on port **8443** inside the VM. How you reach it depends on your network setup:
 
-**Bridged network (recommended):** The VM gets an IP on the same network as the host. Use the VM's IP directly:
+**Option A -- Bridged network (recommended):** The VM gets an IP on the same network as the host. Use the VM's IP directly:
 
 ```bash
 curl -sk https://<vm-ip>:8443/health
 ```
 
-**NAT network (e.g. virbr0):** The VM gets a private IP (192.168.122.x) that is only reachable from the host. To expose the API, add a port-forwarding rule on the KVM host:
+**Option B -- NAT network (e.g. virbr0):** The VM gets a private IP (192.168.122.x) that is only reachable from the host. To expose the API, add a port-forwarding rule on the KVM host:
 
 ```bash
 # On the KVM host -- forward host:8443 to the VM
