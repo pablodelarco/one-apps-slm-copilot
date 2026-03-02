@@ -282,9 +282,9 @@ Set `ONEAPP_COPILOT_LB_BACKENDS` on one VM to turn it into a load balancer. The 
 
 3. **Deploy the LB VM** with backends:
    ```
-   ONEAPP_COPILOT_LB_BACKENDS=sk-paris-pw@100.64.1.10:8443,sk-berlin-pw@100.64.1.20:8443
+   ONEAPP_COPILOT_LB_BACKENDS=parisApiKey123@100.64.1.10:8443,berlinApiKey456@100.64.1.20:8443
    ```
-   Format: `<remote_api_password>@<host>:<port>` -- comma-separated. The LB VM's own llama-server is automatically included as a local backend.
+   Format: `<api_key>@<host>:<port>` -- comma-separated, where `<api_key>` is the `ONEAPP_COPILOT_API_PASSWORD` of each remote VM. The LB VM's own llama-server is automatically included as a local backend.
 
 4. **Give developers the LB VM's endpoint** -- `https://<lb-vm-ip>:8443/v1` with the LB VM's own API key. They don't need to know about the backends.
 
