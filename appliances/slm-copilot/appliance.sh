@@ -169,29 +169,19 @@ write_report_file() {
 
     cat > "${_report}" <<EOF
 [Connection info]
-endpoint     = ${_endpoint}
-api_key      = ${_password}
+endpoint    = ${_endpoint}
+api_key     = ${_password}
+model       = ${ACTIVE_MODEL_ID}
 
-[Model]
-name         = ${ACTIVE_MODEL_ID}
-backend      = llama.cpp (llama-server)
-model_path   = ${ACTIVE_MODEL_PATH}
-context_size = ${ONEAPP_COPILOT_CONTEXT_SIZE}
-threads      = ${ONEAPP_COPILOT_CPU_THREADS}
+[Web UI]
+Open ${_endpoint} in your browser to access the llama.cpp chat interface.
+Use the api_key above as the API Key if prompted.
 
 [Service status]
 llama-server = ${_llama_status}$(is_lb_mode && printf '\nlitellm-proxy = %s' "${_proxy_status}")
 tls          = ${_tls_mode}
 
-[aider setup]
-pip install aider-chat
-
-aider --openai-api-key ${_password} \\
-      --openai-api-base ${_endpoint}/v1 \\
-      --model openai/${ACTIVE_MODEL_ID} \\
-      --no-show-model-warnings
-
-[Any OpenAI-compatible client]
+[OpenAI-compatible API]
 Base URL  : ${_endpoint}/v1
 API Key   : ${_password}
 Model ID  : ${ACTIVE_MODEL_ID}
@@ -200,9 +190,6 @@ Model ID  : ${ACTIVE_MODEL_ID}
 curl -k -H "Authorization: Bearer ${_password}" ${_endpoint}/v1/chat/completions \\
   -H 'Content-Type: application/json' \\
   -d '{"model":"${ACTIVE_MODEL_ID}","messages":[{"role":"user","content":"Hello"}]}'
-
-[Web UI]
-chat_ui      = ${_endpoint}
 EOF
 
     # Append LB section if in load balancer mode
