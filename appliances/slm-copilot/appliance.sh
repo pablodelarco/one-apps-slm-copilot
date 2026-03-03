@@ -359,13 +359,20 @@ _vm_ip="${_pub_ip:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
 _password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'see report')
 _llama=$(systemctl is-active slm-copilot 2>/dev/null || echo 'unknown')
 _model=$(cat /var/lib/slm-copilot/model_id 2>/dev/null || echo 'unknown')
+_proxy=$(systemctl is-active slm-copilot-proxy 2>/dev/null)
 printf '\n'
 printf '  SLM-Copilot -- Sovereign AI Coding Assistant\n'
 printf '  =============================================\n'
 printf '  Endpoint : https://%s:8443\n' "${_vm_ip}"
 printf '  API Key  : %s\n' "${_password}"
 printf '  Model    : %s\n' "${_model}"
-printf '  Chat UI  : https://%s:8443\n' "${_vm_ip}"
+if [ "${_proxy}" = "active" ]; then
+printf '  Web UI   : https://%s:8443/ui\n' "${_vm_ip}"
+printf '  Mode     : load balancer (litellm)\n'
+else
+printf '  Web UI   : https://%s:8443\n' "${_vm_ip}"
+printf '  Mode     : standalone (llama.cpp)\n'
+fi
 printf '  Status   : %s\n' "${_llama}"
 printf '\n'
 printf '  Report   : cat /etc/one-appliance/config\n'
