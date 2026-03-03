@@ -758,8 +758,8 @@ generate_llama_env() {
     local _password
     _password=$(cat "${LLAMA_DATA_DIR}/password" 2>/dev/null || echo 'changeme')
 
-    local _threads="${ONEAPP_COPILOT_CPU_THREADS}"
-    if [ "${_threads}" = "0" ]; then
+    local _threads="${ONEAPP_COPILOT_CPU_THREADS:-0}"
+    if [ "${_threads}" = "0" ] || [ -z "${_threads}" ]; then
         _threads=$(nproc)
         log_copilot info "Auto-detected ${_threads} CPU threads"
     fi
