@@ -200,6 +200,9 @@ Model ID  : ${ACTIVE_MODEL_ID}
 curl -k -H "Authorization: Bearer ${_password}" ${_endpoint}/v1/chat/completions \\
   -H 'Content-Type: application/json' \\
   -d '{"model":"${ACTIVE_MODEL_ID}","messages":[{"role":"user","content":"Hello"}]}'
+
+[Web UI]
+chat_ui      = ${_endpoint}
 EOF
 
     # Append LB section if in load balancer mode
@@ -213,7 +216,7 @@ mode            = litellm (least-busy routing)
 local_backend   = http://127.0.0.1:${LLAMA_PORT_LOCAL}
 remote_backends = ${_n_remotes}
 config          = ${LITELLM_CONFIG}
-web_ui          = https://${_endpoint}:${LLAMA_PORT}/ui
+litellm_ui      = ${_endpoint}/ui
 EOF
     fi
 
@@ -375,7 +378,7 @@ printf '  =============================================\n'
 printf '  Endpoint : https://%s:8443\n' "${_vm_ip}"
 printf '  API Key  : %s\n' "${_password}"
 printf '  Model    : %s\n' "${_model}"
-printf '  Backend  : llama-server (llama.cpp)\n'
+printf '  Chat UI  : https://%s:8443\n' "${_vm_ip}"
 printf '  Status   : %s\n' "${_llama}"
 printf '\n'
 printf '  Report   : cat /etc/one-appliance/config\n'
