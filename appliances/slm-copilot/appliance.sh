@@ -32,7 +32,8 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_API_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
     'ONEAPP_COPILOT_TLS_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
     'ONEAPP_COPILOT_CPU_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
-    'ONEAPP_COPILOT_LB_BACKENDS'       'configure' 'Remote backends for load balancing (empty=standalone)' ''
+    'ONEAPP_COPILOT_LB_ENABLED'        'configure' 'Enable LiteLLM load balancer mode'                     'NO'
+    'ONEAPP_COPILOT_LB_BACKENDS'       'configure' 'Remote backends for load balancing'                    ''
 )
 
 # --------------------------------------------------------------------------
@@ -43,6 +44,7 @@ ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-32768}"
 ONEAPP_COPILOT_API_PASSWORD="${ONEAPP_COPILOT_API_PASSWORD:-}"
 ONEAPP_COPILOT_TLS_DOMAIN="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
 ONEAPP_COPILOT_CPU_THREADS="${ONEAPP_COPILOT_CPU_THREADS:-0}"
+ONEAPP_COPILOT_LB_ENABLED="${ONEAPP_COPILOT_LB_ENABLED:-NO}"
 ONEAPP_COPILOT_LB_BACKENDS="${ONEAPP_COPILOT_LB_BACKENDS:-}"
 
 # --------------------------------------------------------------------------
@@ -105,7 +107,7 @@ log_copilot() {
 #  HELPER: is_lb_mode  (true when LiteLLM load balancing is configured)
 # ==========================================================================
 is_lb_mode() {
-    [ -n "${ONEAPP_COPILOT_LB_BACKENDS:-}" ]
+    [[ "${ONEAPP_COPILOT_LB_ENABLED:-NO}" =~ ^(YES|yes|true|1)$ ]]
 }
 
 # ==========================================================================
@@ -543,9 +545,11 @@ Configuration variables (set via OpenNebula context):
                                 If empty, self-signed certificate is used
   ONEAPP_COPILOT_CPU_THREADS        CPU threads for inference (default: 0 = auto-detect)
                                 Set to number of physical cores for best performance
-  ONEAPP_COPILOT_LB_BACKENDS        Remote backends for load balancing (default: empty)
-                                Format: key@host:port,key@host:port (empty = standalone)
-                                Activates LiteLLM proxy on :8443, llama-server moves to :8444
+  ONEAPP_COPILOT_LB_ENABLED         Enable LiteLLM load balancer mode (default: NO)
+                                When YES, activates LiteLLM proxy on :8443 with Web UI
+  ONEAPP_COPILOT_LB_BACKENDS        Remote backends for load balancing
+                                Format: key@host:port,key@host:port
+                                Requires ONEAPP_COPILOT_LB_ENABLED=YES
 
 Ports:
   8443  HTTPS API (TLS + Bearer token auth + Prometheus metrics)
