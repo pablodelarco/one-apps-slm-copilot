@@ -204,6 +204,8 @@ local_backend   = http://127.0.0.1:${LLAMA_PORT_LOCAL}
 remote_backends = ${_n_remotes}
 config          = ${LITELLM_CONFIG}
 litellm_ui      = ${_endpoint}/ui
+ui_username     = admin
+ui_password     = ${_password}
 EOF
     fi
 
@@ -301,18 +303,32 @@ UNIT_EOF
     apt-get install -y -qq python3-pip python3-venv >/dev/null
     python3 -m venv /opt/litellm
     /opt/litellm/bin/pip install 'litellm[proxy]' --quiet
+    /opt/litellm/bin/pip install prisma nodeenv --quiet
+
+    # Install PostgreSQL (required for LiteLLM Web UI -- prisma schema mandates postgresql)
+    apt-get install -y -qq postgresql postgresql-client >/dev/null
+
+    # Pre-generate prisma client so first boot doesn't need to do it
+    (
+        export PATH="/opt/litellm/bin:${PATH}"
+        cd /opt/litellm/lib/python3.*/site-packages/litellm/proxy
+        prisma generate --schema=schema.prisma 2>/dev/null || true
+    )
+
     /opt/litellm/bin/pip cache purge >/dev/null 2>&1 || true
 
     # Create systemd unit for LiteLLM proxy
     cat > "${LITELLM_SYSTEMD_UNIT}" <<'UNIT_EOF'
 [Unit]
 Description=SLM-Copilot LiteLLM Load Balancer
-After=network-online.target slm-copilot.service
+After=network-online.target slm-copilot.service postgresql.service
 Wants=network-online.target
+Requires=postgresql.service
 
 [Service]
 Type=simple
 EnvironmentFile=/etc/slm-copilot/env
+Environment=UI_USERNAME=admin
 ExecStart=/opt/litellm/bin/litellm \
   --config /etc/slm-copilot/litellm-config.yaml \
   --port 8443 \
@@ -414,6 +430,21 @@ service_configure() {
 
     # 7. Generate LiteLLM config if load balancing is enabled
     if is_lb_mode; then
+        # Ensure PostgreSQL is running and litellm DB exists (for Web UI)
+        systemctl start postgresql
+        local _lb_password
+        _lb_password=$(cat "${LLAMA_DATA_DIR}/password" 2>/dev/null || echo 'changeme')
+        sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='litellm'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE USER litellm WITH PASSWORD '${_lb_password}'"
+        sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='litellm'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE DATABASE litellm OWNER litellm"
+        # Push prisma schema (idempotent -- creates tables if missing)
+        (
+            export PATH="/opt/litellm/bin:${PATH}"
+            export DATABASE_URL="postgresql://litellm:${_lb_password}@localhost:5432/litellm"
+            cd /opt/litellm/lib/python3.*/site-packages/litellm/proxy
+            prisma db push --schema=schema.prisma --accept-data-loss 2>/dev/null || true
+        )
         generate_litellm_config
     fi
 
@@ -873,7 +904,11 @@ litellm_settings:
 
 general_settings:
   master_key: "${_local_password}"
-  database_url: "sqlite:////var/lib/slm-copilot/litellm.db"
+  database_url: "postgresql://litellm:${_local_password}@localhost:5432/litellm"
+
+environment_variables:
+  UI_USERNAME: "admin"
+  UI_PASSWORD: "${_local_password}"
 EOF
 
     chmod 0600 "${LITELLM_CONFIG}"

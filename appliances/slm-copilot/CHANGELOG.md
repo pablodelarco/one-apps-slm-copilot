@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Optional LiteLLM load balancing across multiple SLM-Copilot VMs via ONEAPP_COPILOT_LB_BACKENDS
 - Least-busy routing, automatic failover (2 fails = 30s cooldown), and cross-site distribution
 - LiteLLM proxy systemd unit (slm-copilot-proxy.service) with TLS and master_key auth
+- LiteLLM Web UI (${endpoint}/ui) for monitoring traffic, managing backends, creating API keys, and setting budgets
+- PostgreSQL database for LiteLLM Web UI persistence (auto-provisioned in LB mode)
 - Mode-switch cleanup: switching between standalone and LB mode across reboots is safe
 - Let's Encrypt renewal hook restarts LiteLLM proxy when active
 
