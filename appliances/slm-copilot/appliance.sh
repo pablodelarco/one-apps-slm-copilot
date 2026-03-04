@@ -197,7 +197,7 @@ EOF
     # Append LB section if in load balancer mode
     if is_lb_mode; then
         local _n_remotes
-        _n_remotes=$(echo "${ONEAPP_COPILOT_LB_BACKENDS}" | tr ',' '\n' | grep -c '[^[:space:]]')
+        _n_remotes=$(echo "${ONEAPP_COPILOT_LB_BACKENDS}" | tr ',' '\n' | grep -c '[^[:space:]]' || true)
         cat >> "${_report}" <<EOF
 
 [Load Balancer]
