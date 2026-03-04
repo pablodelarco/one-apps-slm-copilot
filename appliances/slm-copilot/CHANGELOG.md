@@ -4,6 +4,15 @@ All notable changes to the SLM-Copilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0] - 2026-03-04
+
+### Added
+
+- Zero-touch auto-registration: standalone VMs can automatically register as
+  backends in a remote LiteLLM load balancer on boot and deregister on shutdown.
+  Configure via ONEAPP_COPILOT_LB_URL and ONEAPP_COPILOT_LB_MASTER_KEY.
+- Systemd deregistration service ensures clean removal from LB on VM shutdown/reboot.
+
 ## [2.1.1] - 2026-03-04
 
 ### Changed

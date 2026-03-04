@@ -71,6 +71,8 @@ opennebula_template:
     ONEAPP_COPILOT_TLS_DOMAIN: '$ONEAPP_COPILOT_TLS_DOMAIN'
     ONEAPP_COPILOT_LB_ENABLED: '$ONEAPP_COPILOT_LB_ENABLED'
     ONEAPP_COPILOT_LB_BACKENDS: '$ONEAPP_COPILOT_LB_BACKENDS'
+    ONEAPP_COPILOT_LB_URL: '$ONEAPP_COPILOT_LB_URL'
+    ONEAPP_COPILOT_LB_MASTER_KEY: '$ONEAPP_COPILOT_LB_MASTER_KEY'
   CPU: '16'
   VCPU: '16'
   CPU_MODEL:
@@ -90,7 +92,9 @@ opennebula_template:
     ONEAPP_COPILOT_API_PASSWORD,
     ONEAPP_COPILOT_TLS_DOMAIN,
     ONEAPP_COPILOT_LB_ENABLED,
-    ONEAPP_COPILOT_LB_BACKENDS
+    ONEAPP_COPILOT_LB_BACKENDS,
+    ONEAPP_COPILOT_LB_URL,
+    ONEAPP_COPILOT_LB_MASTER_KEY
   user_inputs:
     oneapp_copilot_ai_model: >-
       M|list|AI Model|Devstral Small 2 (24B ~14GB built-in),Mistral Small Instruct (24B ~14GB),Mistral Nemo Instruct (12B ~7GB),Mistral 7B Instruct (7B ~4GB)|Devstral Small 2 (24B ~14GB built-in)
@@ -106,6 +110,10 @@ opennebula_template:
       O|boolean|Enable Load Balancer mode (LiteLLM proxy)||NO
     oneapp_copilot_lb_backends: >-
       O|text|Load Balancer backends (key@host:port, comma-separated)||
+    oneapp_copilot_lb_url: >-
+      O|text|Remote LB URL for auto-registration (e.g. https://lb:8443)||
+    oneapp_copilot_lb_master_key: >-
+      O|password|Remote LB master key for auto-registration||
 logo: slm-copilot.png
 images:
   - name: slm_copilot_os
