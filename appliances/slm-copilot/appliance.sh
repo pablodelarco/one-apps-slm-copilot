@@ -945,6 +945,7 @@ general_settings:
   database_url: "postgresql://litellm:${_local_password}@localhost:5432/litellm"
 
 environment_variables:
+  STORE_MODEL_IN_DB: "True"
   UI_USERNAME: "admin"
   UI_PASSWORD: "${_local_password}"
 EOF
