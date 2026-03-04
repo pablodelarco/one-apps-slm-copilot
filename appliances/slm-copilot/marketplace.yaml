@@ -94,8 +94,7 @@ opennebula_template:
     ONEAPP_COPILOT_LB_BACKENDS
   user_inputs:
     oneapp_copilot_ai_model: >-
-      M|list|AI Model|Devstral Small 24B (built-in),Codestral 22B,Mistral Nemo
-      12B,Codestral Mamba 7B,Mistral 7B|Devstral Small 24B (built-in)
+      M|list|AI Model|Devstral Small 2 (24B, ~14GB, built-in),Mistral Small Instruct (24B, ~14GB),Mistral Nemo Instruct (12B, ~7GB),Mistral 7B Instruct (7B, ~4GB)|Devstral Small 2 (24B, ~14GB, built-in)
     oneapp_copilot_context_size: >-
       O|list|Context Window (tokens)|8192,16384,32768|32768
     oneapp_copilot_cpu_threads: >-

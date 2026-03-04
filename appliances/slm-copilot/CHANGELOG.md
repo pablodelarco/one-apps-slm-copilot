@@ -6,12 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [2.1.1] - 2026-03-04
 
+### Changed
+
+- Replaced model catalog: removed base/completion-only models (Codestral 22B v0.1,
+  Codestral Mamba 7B) that lack chat templates. New instruct-only catalog:
+  Devstral Small 2 (24B, built-in), Mistral Small Instruct (24B),
+  Mistral Nemo Instruct (12B), Mistral 7B Instruct (7B).
+  Each entry now shows parameter count and approximate GGUF size.
+
 ### Fixed
 
-- Added `--chat-template chatml` to llama-server for OpenAI client compatibility.
-  The built-in Devstral Jinja template enforces strict alternating user/assistant
-  roles, which breaks multi-turn clients (e.g. OpenHands, agentic frameworks).
-  ChatML keeps `--jinja` tool-calling support while accepting flexible role ordering.
+- Added `stop: ["<|im_end|>"]` to LiteLLM backend configs to prevent ChatML stop
+  tokens from leaking into responses when routing through the load balancer.
+- Added `STORE_MODEL_IN_DB: "True"` to LiteLLM environment to enable adding and
+  removing models from the Web UI.
 
 ### Notes
 
