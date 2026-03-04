@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Removed commas from model list display names to prevent OpenNebula
+  user_inputs list parser from splitting them into separate entries.
+
+### Fixed
+
 - Added `stop: ["<|im_end|>"]` to LiteLLM backend configs to prevent ChatML stop
   tokens from leaking into responses when routing through the load balancer.
 - Added `STORE_MODEL_IN_DB: "True"` to LiteLLM environment to enable adding and
