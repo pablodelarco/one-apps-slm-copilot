@@ -896,6 +896,7 @@ model_list:
       model: "openai/${ACTIVE_MODEL_ID}"
       api_base: "http://127.0.0.1:${LLAMA_PORT_LOCAL}/v1"
       api_key: "${_local_password}"
+      stop: ["<|im_end|>"]
 EOF
 
     # Parse remote backends: "key@host:port,key@host:port" or "host:port,host:port"
@@ -923,6 +924,7 @@ EOF
       model: "openai/${ACTIVE_MODEL_ID}"
       api_base: "${_url}/v1"
       api_key: "${_key}"
+      stop: ["<|im_end|>"]
 EOF
         _i=$((_i + 1))
     done
