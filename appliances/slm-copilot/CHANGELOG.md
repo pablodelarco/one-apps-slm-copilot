@@ -4,6 +4,23 @@ All notable changes to the SLM-Copilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.1] - 2026-03-04
+
+### Fixed
+
+- Added `--chat-template chatml` to llama-server for OpenAI client compatibility.
+  The built-in Devstral Jinja template enforces strict alternating user/assistant
+  roles, which breaks multi-turn clients (e.g. OpenHands, agentic frameworks).
+  ChatML keeps `--jinja` tool-calling support while accepting flexible role ordering.
+
+### Notes
+
+- When connecting from clients that validate TLS certificates (e.g. OpenHands with
+  httpx/litellm), the self-signed certificate will be rejected. Use a valid TLS
+  certificate: configure Let's Encrypt via ONEAPP_COPILOT_TLS_DOMAIN, or expose the
+  endpoint through a TLS-terminating proxy with a trusted certificate (e.g. Tailscale
+  Funnel, Cloudflare Tunnel, or a reverse proxy with a CA-signed cert).
+
 ## [2.1.0] - 2026-02-25
 
 ### Added
