@@ -186,7 +186,15 @@ tls          = ${_tls_mode}
 [OpenAI-compatible API]
 Base URL  : ${_endpoint}/v1
 API Key   : ${_password}
-Model ID  : ${ACTIVE_MODEL_ID}
+Model     : openai/${ACTIVE_MODEL_ID}
+
+[aider setup]
+aider --model openai/${ACTIVE_MODEL_ID} --api-base ${_endpoint}/v1 --api-key ${_password}
+
+[OpenHands / other OpenAI clients]
+Model     : openai/${ACTIVE_MODEL_ID}
+Base URL  : ${_endpoint}/v1
+API Key   : ${_password}
 
 [Test with curl]
 curl -k -H "Authorization: Bearer ${_password}" ${_endpoint}/v1/chat/completions \\
@@ -272,6 +280,7 @@ ARGS=(
     --ctx-size "${LLAMA_CTX_SIZE}"
     --threads "${LLAMA_THREADS}"
     --flash-attn on
+    --jinja
     --mlock
     --metrics
     --prio 2
@@ -381,17 +390,26 @@ _proxy=$(systemctl is-active slm-copilot-proxy 2>/dev/null)
 printf '\n'
 printf '  SLM-Copilot -- Sovereign AI Coding Assistant\n'
 printf '  =============================================\n'
-printf '  Endpoint : https://%s:8443\n' "${_vm_ip}"
-printf '  API Key  : %s\n' "${_password}"
-printf '  Model    : %s\n' "${_model}"
 if [ "${_proxy}" = "active" ]; then
-printf '  Web UI   : https://%s:8443/ui\n' "${_vm_ip}"
 printf '  Mode     : load balancer (litellm)\n'
 else
-printf '  Web UI   : https://%s:8443\n' "${_vm_ip}"
 printf '  Mode     : standalone (llama.cpp)\n'
 fi
 printf '  Status   : %s\n' "${_llama}"
+printf '\n'
+printf '  [OpenAI-compatible API]\n'
+printf '  Base URL : https://%s:8443/v1\n' "${_vm_ip}"
+printf '  API Key  : %s\n' "${_password}"
+printf '  Model    : openai/%s\n' "${_model}"
+printf '\n'
+if [ "${_proxy}" = "active" ]; then
+printf '  [Web UI]\n'
+printf '  URL      : https://%s:8443/ui\n' "${_vm_ip}"
+printf '  Login    : admin / <api_key above>\n'
+printf '\n'
+fi
+printf '  [Quick start]\n'
+printf '  aider --model openai/%s --api-base https://%s:8443/v1 --api-key %s\n' "${_model}" "${_vm_ip}" "${_password}"
 printf '\n'
 printf '  Report   : cat /etc/one-appliance/config\n'
 printf '  Logs     : tail -f /var/log/one-appliance/slm-copilot.log\n'
@@ -636,9 +654,24 @@ resolve_model() {
 
     log_copilot info "Downloading ${ACTIVE_MODEL_ID} from HuggingFace..."
     mkdir -p "${LLAMA_MODEL_DIR}"
-    if ! curl -fSL --progress-bar -o "${ACTIVE_MODEL_PATH}" "${_hf_url}"; then
+    if ! curl -4 -fSL --connect-timeout 15 --retry 2 --progress-bar -o "${ACTIVE_MODEL_PATH}" "${_hf_url}"; then
         log_copilot error "Failed to download model from ${_hf_url}"
         rm -f "${ACTIVE_MODEL_PATH}"
+
+        # Graceful fallback: use built-in Devstral if available
+        local _fallback="${LLAMA_MODEL_DIR}/${BUILTIN_MODEL_GGUF}"
+        if [ -f "${_fallback}" ]; then
+            local _fb_size
+            _fb_size=$(stat -c%s "${_fallback}" 2>/dev/null || echo 0)
+            if [ "${_fb_size}" -gt 1000000000 ]; then
+                log_copilot warning "Falling back to built-in Devstral (download failed -- check VM internet connectivity)"
+                ACTIVE_MODEL_ID="devstral-small-2"
+                ACTIVE_MODEL_PATH="${_fallback}"
+                _persist_model_info
+                return 0
+            fi
+        fi
+        log_copilot error "No fallback model available. Ensure the VM has internet access and retry."
         exit 1
     fi
 
