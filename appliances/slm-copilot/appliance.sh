@@ -281,7 +281,6 @@ ARGS=(
     --threads "${LLAMA_THREADS}"
     --flash-attn on
     --jinja
-    --chat-template chatml
     --mlock
     --metrics
     --prio 2
