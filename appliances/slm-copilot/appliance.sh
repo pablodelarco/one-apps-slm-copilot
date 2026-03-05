@@ -197,9 +197,6 @@ Base URL  : ${_endpoint}/v1
 API Key   : ${_password}
 Model     : openai/${ACTIVE_MODEL_ID}
 
-[aider setup]
-aider --model openai/${ACTIVE_MODEL_ID} --api-base ${_endpoint}/v1 --api-key ${_password}
-
 [OpenHands / other OpenAI clients]
 Model     : openai/${ACTIVE_MODEL_ID}
 Base URL  : ${_endpoint}/v1
@@ -703,12 +700,9 @@ printf '\n'
 if [ "${_proxy}" = "active" ]; then
 printf '  [Web UI]\n'
 printf '  URL      : https://%s:8443/ui\n' "${_vm_ip}"
-printf '  Login    : admin / <api_key above>\n'
+printf '  Login    : admin / %s\n' "${_password}"
 printf '\n'
 fi
-printf '  [Quick start]\n'
-printf '  aider --model openai/%s --api-base https://%s:8443/v1 --api-key %s\n' "${_model}" "${_vm_ip}" "${_password}"
-printf '\n'
 printf '  Report   : cat /etc/one-appliance/config\n'
 printf '  Logs     : tail -f /var/log/one-appliance/slm-copilot.log\n'
 printf '\n'
