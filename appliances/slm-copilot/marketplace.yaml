@@ -72,8 +72,8 @@ opennebula_template:
     ONEAPP_COPILOT_TLS_DOMAIN: '$ONEAPP_COPILOT_TLS_DOMAIN'
     ONEAPP_COPILOT_LB_ENABLED: '$ONEAPP_COPILOT_LB_ENABLED'
     ONEAPP_COPILOT_LB_BACKENDS: '$ONEAPP_COPILOT_LB_BACKENDS'
-    ONEAPP_COPILOT_LB_URL: '$ONEAPP_COPILOT_LB_URL'
-    ONEAPP_COPILOT_LB_MASTER_KEY: '$ONEAPP_COPILOT_LB_MASTER_KEY'
+    ONEAPP_COPILOT_REGISTER_URL: '$ONEAPP_COPILOT_REGISTER_URL'
+    ONEAPP_COPILOT_REGISTER_KEY: '$ONEAPP_COPILOT_REGISTER_KEY'
   CPU: '16'
   VCPU: '16'
   CPU_MODEL:
@@ -92,8 +92,8 @@ opennebula_template:
     ONEAPP_COPILOT_CPU_THREADS,
     ONEAPP_COPILOT_API_PASSWORD,
     ONEAPP_COPILOT_TLS_DOMAIN,
-    ONEAPP_COPILOT_LB_URL,
-    ONEAPP_COPILOT_LB_MASTER_KEY,
+    ONEAPP_COPILOT_REGISTER_URL,
+    ONEAPP_COPILOT_REGISTER_KEY,
     ONEAPP_COPILOT_LB_ENABLED,
     ONEAPP_COPILOT_LB_BACKENDS
   user_inputs:
@@ -111,9 +111,9 @@ opennebula_template:
       O|boolean|Enable Load Balancer mode (LiteLLM proxy)||NO
     oneapp_copilot_lb_backends: >-
       O|text|Load Balancer backends (key@host:port, comma-separated)||
-    oneapp_copilot_lb_url: >-
+    oneapp_copilot_register_url: >-
       O|text|Remote LB URL for auto-registration (e.g. https://lb:8443)||
-    oneapp_copilot_lb_master_key: >-
+    oneapp_copilot_register_key: >-
       O|password|Remote LB master key for auto-registration||
 logo: slm-copilot.png
 images:

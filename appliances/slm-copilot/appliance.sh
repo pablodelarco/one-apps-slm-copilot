@@ -34,8 +34,8 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_CPU_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
     'ONEAPP_COPILOT_LB_ENABLED'        'configure' 'Enable LiteLLM load balancer mode'                     'NO'
     'ONEAPP_COPILOT_LB_BACKENDS'       'configure' 'Remote backends for load balancing'                    ''
-    'ONEAPP_COPILOT_LB_URL'            'configure' 'Remote LB URL for auto-registration'                  ''
-    'ONEAPP_COPILOT_LB_MASTER_KEY'     'configure' 'Remote LB master key for auto-registration'           ''
+    'ONEAPP_COPILOT_REGISTER_URL'            'configure' 'Remote LB URL for auto-registration'                  ''
+    'ONEAPP_COPILOT_REGISTER_KEY'     'configure' 'Remote LB master key for auto-registration'           ''
 )
 
 # --------------------------------------------------------------------------
@@ -48,8 +48,8 @@ ONEAPP_COPILOT_TLS_DOMAIN="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
 ONEAPP_COPILOT_CPU_THREADS="${ONEAPP_COPILOT_CPU_THREADS:-0}"
 ONEAPP_COPILOT_LB_ENABLED="${ONEAPP_COPILOT_LB_ENABLED:-NO}"
 ONEAPP_COPILOT_LB_BACKENDS="${ONEAPP_COPILOT_LB_BACKENDS:-}"
-ONEAPP_COPILOT_LB_URL="${ONEAPP_COPILOT_LB_URL:-}"
-ONEAPP_COPILOT_LB_MASTER_KEY="${ONEAPP_COPILOT_LB_MASTER_KEY:-}"
+ONEAPP_COPILOT_REGISTER_URL="${ONEAPP_COPILOT_REGISTER_URL:-}"
+ONEAPP_COPILOT_REGISTER_KEY="${ONEAPP_COPILOT_REGISTER_KEY:-}"
 
 # --------------------------------------------------------------------------
 # Constants
@@ -233,14 +233,14 @@ EOF
 # register_with_lb -- phone home to a remote LiteLLM LB on boot
 # --------------------------------------------------------------------------
 register_with_lb() {
-    local _lb_url="${ONEAPP_COPILOT_LB_URL:-}"
-    local _lb_key="${ONEAPP_COPILOT_LB_MASTER_KEY:-}"
+    local _lb_url="${ONEAPP_COPILOT_REGISTER_URL:-}"
+    local _lb_key="${ONEAPP_COPILOT_REGISTER_KEY:-}"
 
     # Skip if not configured
     [[ -z "${_lb_url}" ]] && return 0
 
     if [[ -z "${_lb_key}" ]]; then
-        log_copilot warning "ONEAPP_COPILOT_LB_URL set but ONEAPP_COPILOT_LB_MASTER_KEY is empty -- skipping LB registration"
+        log_copilot warning "ONEAPP_COPILOT_REGISTER_URL set but ONEAPP_COPILOT_REGISTER_KEY is empty -- skipping LB registration"
         return 0
     fi
 
