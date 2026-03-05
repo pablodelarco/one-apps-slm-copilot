@@ -36,4 +36,8 @@ fi
 
 policy_rc_d_enable
 
+# Ensure system users exist -- policy-rc.d blocks systemd-sysusers during
+# package installation, so users like systemd-network and sshd may be missing.
+systemd-sysusers
+
 sync
