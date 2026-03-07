@@ -671,13 +671,7 @@ UNIT_EOF
     cat > /etc/profile.d/slm-copilot-banner.sh <<'BANNER_EOF'
 #!/bin/bash
 [[ $- == *i* ]] || return
-_pub_ip=""
-for _svc in "https://ifconfig.me" "https://api.ipify.org" "https://icanhazip.com"; do
-    _pub_ip=$(curl -sf --max-time 3 "${_svc}" 2>/dev/null | tr -d '[:space:]')
-    [[ "${_pub_ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && break
-    _pub_ip=""
-done
-_vm_ip="${_pub_ip:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+_vm_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 _password=$(cat /var/lib/slm-copilot/password 2>/dev/null || echo 'see report')
 _llama=$(systemctl is-active slm-copilot 2>/dev/null || echo 'unknown')
 _model=$(cat /var/lib/slm-copilot/model_id 2>/dev/null || echo 'unknown')
