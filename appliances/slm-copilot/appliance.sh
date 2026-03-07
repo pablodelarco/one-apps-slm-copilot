@@ -872,7 +872,7 @@ Configuration variables (set via OpenNebula context):
                                 Mistral Nemo 12B, Mistral 7B Instruct
   ONEAPP_COPILOT_CONTEXT_SIZE   Model context window in tokens (default: 32768)
                                 Valid range: 512-131072 tokens
-  ONEAPP_COPILOT_API_PASSWORD        API key / Bearer token (auto-generated 16-char if empty)
+  ONEAPP_COPILOT_API_PASSWORD        API key / Bearer token (auto-generated sk-... if empty)
   ONEAPP_COPILOT_TLS_DOMAIN         FQDN for Let's Encrypt certificate (optional)
                                 If empty, self-signed certificate is used
   ONEAPP_COPILOT_CPU_THREADS        CPU threads for inference (default: 0 = auto-detect)
@@ -1087,7 +1087,7 @@ generate_password() {
             log_copilot info "Keeping existing auto-generated API key"
             return 0
         fi
-        _password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+        _password="sk-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)"
         log_copilot info "Auto-generated API key (no ONEAPP_COPILOT_API_PASSWORD set)"
     fi
 
