@@ -4,6 +4,25 @@ All notable changes to the SLM-Copilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.3.0] - 2026-03-07
+
+### Changed
+
+- Auto-generated API keys now use `sk-` prefix (OpenAI convention) with 48 random
+  characters (51 chars total), replacing the previous 16-char bare hex tokens.
+
+### Fixed
+
+- SSH welcome banner now shows the local IP address instead of the public IP.
+- Removed aider reference from banner; API key shown in Web UI login instructions.
+- System users (slm-copilot, litellm, postgres) are created during packer build
+  to prevent UID/GID conflicts at runtime.
+
+### Added
+
+- Persistent cross-site routes via VR for LB mode: backend VMs automatically add
+  static routes to reach other site subnets through the local Virtual Router.
+
 ## [2.2.0] - 2026-03-04
 
 ### Added
