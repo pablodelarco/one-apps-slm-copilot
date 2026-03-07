@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- ONEAPP_COPILOT_REGISTER_MODEL_NAME context variable: override the model name
+  used when auto-registering with a remote LB (e.g. `devstral-small-2-poland`).
 - Persistent cross-site routes via VR for LB mode: backend VMs automatically add
   static routes to reach other site subnets through the local Virtual Router.
 

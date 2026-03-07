@@ -36,6 +36,7 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_LB_BACKENDS'       'configure' 'Remote backends for load balancing'                    ''
     'ONEAPP_COPILOT_REGISTER_URL'            'configure' 'Remote LB URL for auto-registration'                  ''
     'ONEAPP_COPILOT_REGISTER_KEY'     'configure' 'Remote LB master key for auto-registration'           ''
+    'ONEAPP_COPILOT_REGISTER_MODEL_NAME' 'configure' 'Model name override for LB registration'           ''
 )
 
 # --------------------------------------------------------------------------
@@ -50,6 +51,7 @@ ONEAPP_COPILOT_LB_ENABLED="${ONEAPP_COPILOT_LB_ENABLED:-NO}"
 ONEAPP_COPILOT_LB_BACKENDS="${ONEAPP_COPILOT_LB_BACKENDS:-}"
 ONEAPP_COPILOT_REGISTER_URL="${ONEAPP_COPILOT_REGISTER_URL:-}"
 ONEAPP_COPILOT_REGISTER_KEY="${ONEAPP_COPILOT_REGISTER_KEY:-}"
+ONEAPP_COPILOT_REGISTER_MODEL_NAME="${ONEAPP_COPILOT_REGISTER_MODEL_NAME:-}"
 
 # --------------------------------------------------------------------------
 # Constants
@@ -260,9 +262,12 @@ register_with_lb() {
         return 0
     fi
 
-    # Resolve model_id from catalog for model_name
-    _load_model_info
-    local _model_id="${_ACTIVE_MODEL_ID:-devstral}"
+    # Resolve model_id from catalog for model_name (allow override)
+    local _model_id="${ONEAPP_COPILOT_REGISTER_MODEL_NAME:-}"
+    if [[ -z "${_model_id}" ]]; then
+        _load_model_info
+        _model_id="${_ACTIVE_MODEL_ID:-devstral}"
+    fi
 
     # Strip trailing slash from LB URL
     _lb_url="${_lb_url%/}"
