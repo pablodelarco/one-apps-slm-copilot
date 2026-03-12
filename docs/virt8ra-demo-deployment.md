@@ -39,6 +39,8 @@ Each site has:
 | Poland | 192.168.102.0/24 | 151.115.91.50 | `ssh root@100.84.125.71` | vr-poland | devstral-small-2-poland |
 | UK | 192.168.103.0/24 | 57.128.188.10 | `ssh root@100.94.160.40` | vr-uk | devstral-small-2-uk |
 | Spain | 192.168.104.0/24 | 185.99.184.102 | `ssh -i KEY ubuntu@185.99.184.102` | vr-spain | devstral-small-2-spain |
+| Canada | 192.168.105.0/24 | 148.113.216.22 | `ssh -i virt8rakey ubuntu@148.113.216.22` | vr-canada (100.71.63.11) | devstral-small-2-canada |
+| Australia | 192.168.106.0/24 | 51.161.174.156 | `ssh -i virt8rakey ubuntu@51.161.174.156` | vr-australia (100.69.244.60) | devstral-small-2-australia |
 
 Convention: site ID increments per site (101, 102, 103, 104...). VR is always `.99`, first backend is `.100`.
 
