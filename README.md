@@ -1,4 +1,4 @@
-# SLM-Copilot: Sovereign AI Coding Assistant
+# EuroCopilot: Sovereign AI Coding Assistant
 
 Your code never leaves your infrastructure. Deploy a private AI coding copilot on any VM -- no GPU, no cloud APIs, no subscriptions.
 
@@ -37,8 +37,8 @@ When you set `ONEAPP_COPILOT_LB_BACKENDS`, a [LiteLLM](https://github.com/BerriA
 Client --> :8443 (LiteLLM proxy, TLS + auth)
               |
               +--> localhost:8444  (local llama-server, plain HTTP)
-              +--> https://10.0.1.10:8443  (remote SLM-Copilot VM)
-              +--> https://10.0.1.11:8443  (remote SLM-Copilot VM)
+              +--> https://10.0.1.10:8443  (remote EuroCopilot VM)
+              +--> https://10.0.1.11:8443  (remote EuroCopilot VM)
 ```
 
 LiteLLM picks a backend using "least-busy" routing, forwards the request, and streams the response back. The client sees a single endpoint.
@@ -83,7 +83,7 @@ CONTEXT = [
     ONEAPP_COPILOT_LB_BACKENDS     = ""
 ]
 
-DISK = [ IMAGE = "SLM-Copilot" ]
+DISK = [ IMAGE = "EuroCopilot" ]
 
 NIC = [ NETWORK = "your-network" ]
 NIC_DEFAULT = [ MODEL = "virtio" ]
@@ -123,12 +123,12 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
    {
      "$schema": "https://opencode.ai/config.json",
      "provider": {
-       "slm-copilot": {
+       "eurocopilot": {
          "npm": "@ai-sdk/openai-compatible",
-         "name": "SLM-Copilot",
+         "name": "EuroCopilot",
          "options": {
            "baseURL": "https://<vm-ip>:8443/v1",
-           "apiKey": "{env:SLM_COPILOT_API_KEY}"
+           "apiKey": "{env:EUROCOPILOT_API_KEY}"
          },
          "models": {
            "devstral-small-2": {
@@ -137,12 +137,12 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
          }
        }
      },
-     "model": "slm-copilot/devstral-small-2"
+     "model": "eurocopilot/devstral-small-2"
    }
    ```
    Then set your API key and run:
    ```bash
-   export SLM_COPILOT_API_KEY=<api-key>
+   export EUROCOPILOT_API_KEY=<api-key>
    export NODE_TLS_REJECT_UNAUTHORIZED=0   # only for self-signed certs
    opencode
    ```
@@ -156,7 +156,7 @@ Leave `ONEAPP_COPILOT_API_PASSWORD` empty for auto-generation. Set `ONEAPP_COPIL
 
 ### Accessing the API endpoint
 
-The SLM-Copilot API listens on port **8443** inside the VM. How you reach it depends on your network setup:
+The EuroCopilot API listens on port **8443** inside the VM. How you reach it depends on your network setup:
 
 **Option A -- Bridged network (recommended):** The VM gets an IP on the same network as the host. Use the VM's IP directly:
 
@@ -202,7 +202,7 @@ ip addr show eth0
 cat /etc/one-appliance/config
 
 # Or read it from the env file
-grep LLAMA_API_KEY /etc/slm-copilot/env
+grep LLAMA_API_KEY /etc/eurocopilot/env
 ```
 
 **Quick test with chat completions:**
@@ -274,7 +274,7 @@ Set `ONEAPP_COPILOT_LB_BACKENDS` on one VM to turn it into a load balancer. The 
 
 ### Setup
 
-1. **Deploy standalone VMs** in each zone -- standard SLM-Copilot VMs, no special config. Note each VM's IP and API password (`cat /etc/one-appliance/config`).
+1. **Deploy standalone VMs** in each zone -- standard EuroCopilot VMs, no special config. Note each VM's IP and API password (`cat /etc/one-appliance/config`).
 
 2. **Ensure network reachability** on port 8443 between all VMs:
    - [Tailscale](https://tailscale.com) (recommended) -- automatic mesh, use 100.x.y.z IPs
@@ -292,7 +292,7 @@ Set `ONEAPP_COPILOT_LB_BACKENDS` on one VM to turn it into a load balancer. The 
 
 ```bash
 curl -sk https://127.0.0.1:8443/health/liveliness   # "I'm alive!"
-journalctl -u slm-copilot-proxy -f                   # watch routing decisions
+journalctl -u eurocopilot-proxy -f                   # watch routing decisions
 ```
 
 ### Scaling guide
@@ -318,7 +318,7 @@ Runs 7 checks: HTTPS connectivity, health endpoint, auth rejection, auth accepta
 
 | Problem | Fix |
 |---------|-----|
-| Service won't start | VM needs at least 32 GB RAM. Check: `journalctl -u slm-copilot` |
+| Service won't start | VM needs at least 32 GB RAM. Check: `journalctl -u eurocopilot` |
 | Slow inference | Add more vCPUs. Ensure `host-passthrough` CPU model. Check: `grep avx2 /proc/cpuinfo` |
 | Inference hangs | CPU model must be `host-passthrough` (not `qemu64`). Set in VM template: CPU Model > `host-passthrough` |
 | Let's Encrypt fails | DNS must resolve and port 80 must be reachable. Falls back to self-signed automatically |
@@ -329,9 +329,9 @@ Runs 7 checks: HTTPS connectivity, health endpoint, auth rejection, auth accepta
 
 | Log | Location |
 |-----|----------|
-| Inference server | `journalctl -u slm-copilot` |
-| LiteLLM proxy (LB mode) | `journalctl -u slm-copilot-proxy` |
-| Application log | `/var/log/one-appliance/slm-copilot.log` |
+| Inference server | `journalctl -u eurocopilot` |
+| LiteLLM proxy (LB mode) | `journalctl -u eurocopilot-proxy` |
+| Application log | `/var/log/one-appliance/eurocopilot.log` |
 | Report file | `/etc/one-appliance/config` |
 
 ## Performance

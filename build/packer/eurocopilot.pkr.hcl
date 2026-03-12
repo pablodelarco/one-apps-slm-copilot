@@ -14,8 +14,8 @@ build {
   }
 }
 
-# Build 2: Provision the SLM-Copilot QCOW2 image
-source "qemu" "slm_copilot" {
+# Build 2: Provision the EuroCopilot QCOW2 image
+source "qemu" "eurocopilot" {
   accelerator = "kvm"
 
   cpus      = 4
@@ -53,8 +53,8 @@ source "qemu" "slm_copilot" {
 }
 
 build {
-  name    = "slm-copilot"
-  sources = ["source.qemu.slm_copilot"]
+  name    = "eurocopilot"
+  sources = ["source.qemu.eurocopilot"]
 
   # Step 1: SSH hardening
   provisioner "shell" {
@@ -112,9 +112,9 @@ build {
     destination = "/etc/one-appliance/lib/functions.sh"
   }
 
-  # Step 5: Install SLM-Copilot appliance script
+  # Step 5: Install EuroCopilot appliance script
   provisioner "file" {
-    source      = "../../appliances/slm-copilot/appliance.sh"
+    source      = "../../appliances/eurocopilot/appliance.sh"
     destination = "/etc/one-appliance/service.d/appliance.sh"
   }
 

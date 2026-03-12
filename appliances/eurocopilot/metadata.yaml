@@ -1,11 +1,11 @@
 ---
 :app:
-  :name: SLM-Copilot
+  :name: EuroCopilot
   :type: image
   :version: 2.0.0
   :publisher: OpenNebula Systems
   :description: Sovereign AI coding assistant (Devstral Small 2 24B on CPU via llama.cpp)
-  :url: https://github.com/pablodelarco/one-apps-slm-copilot
+  :url: https://github.com/pablodelarco/one-apps-eurocopilot
   :tags:
     - ai
     - llm
@@ -52,7 +52,7 @@
 
 :infra:
   :disk_format: qcow2
-  :apps_path: appliances/slm-copilot
+  :apps_path: appliances/eurocopilot
   :os: Ubuntu 24.04 LTS
   :arch: x86_64
   :hypervisor: KVM

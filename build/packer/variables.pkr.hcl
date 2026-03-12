@@ -1,6 +1,6 @@
 variable "appliance_name" {
   type    = string
-  default = "slm-copilot"
+  default = "eurocopilot"
 }
 
 variable "input_dir" {

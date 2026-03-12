@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SLM-Copilot Post-Deployment Test
+# EuroCopilot Post-Deployment Test
 # Validates a running instance with 7 checks.
 # Usage: ./test.sh <endpoint> <password>
 # Example: ./test.sh https://10.0.0.1:8443 myapikey
@@ -29,7 +29,7 @@ report() {
 }
 
 echo ""
-echo "SLM-Copilot Post-Deployment Test"
+echo "EuroCopilot Post-Deployment Test"
 echo "================================="
 echo "Endpoint: ${ENDPOINT}"
 echo ""

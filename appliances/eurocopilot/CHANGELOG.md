@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the SLM-Copilot appliance will be documented in this file.
+All notable changes to the EuroCopilot appliance will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - SSH welcome banner now shows the local IP address instead of the public IP.
 - Removed aider reference from banner; API key shown in Web UI login instructions.
-- System users (slm-copilot, litellm, postgres) are created during packer build
+- System users (eurocopilot, litellm, postgres) are created during packer build
   to prevent UID/GID conflicts at runtime.
 
 ### Added
@@ -68,9 +68,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Optional LiteLLM load balancing across multiple SLM-Copilot VMs via ONEAPP_COPILOT_LB_BACKENDS
+- Optional LiteLLM load balancing across multiple EuroCopilot VMs via ONEAPP_COPILOT_LB_BACKENDS
 - Least-busy routing, automatic failover (2 fails = 30s cooldown), and cross-site distribution
-- LiteLLM proxy systemd unit (slm-copilot-proxy.service) with TLS and master_key auth
+- LiteLLM proxy systemd unit (eurocopilot-proxy.service) with TLS and master_key auth
 - LiteLLM Web UI (${endpoint}/ui) for monitoring traffic, managing backends, creating API keys, and setting budgets
 - PostgreSQL database for LiteLLM Web UI persistence (auto-provisioned in LB mode)
 - Mode-switch cleanup: switching between standalone and LB mode across reboots is safe
@@ -89,7 +89,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - CPU tuning: mlock, flash-attn, thread pinning, process priority
 - Model GGUF baked directly into image from Hugging Face (no Ollama registry dependency)
 - certbot standalone mode for Let's Encrypt (port 80 is free without nginx)
-- Systemd unit name changed from ollama/nginx to slm-copilot
+- Systemd unit name changed from ollama/nginx to eurocopilot
 
 ### Added
 
@@ -126,7 +126,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Initial release of SLM-Copilot appliance
+- Initial release of EuroCopilot appliance
 - Devstral Small 2 24B (Q4_K_M) served by LocalAI v3.11.0 on CPU
 - OpenAI-compatible API (chat completions with streaming)
 - HTTPS reverse proxy with nginx and self-signed TLS

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SLM-Copilot QCOW2 Build Wrapper
+# EuroCopilot QCOW2 Build Wrapper
 # Checks dependencies, downloads base image, runs Packer, compresses, checksums.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -11,7 +11,7 @@ ONE_APPS_DIR="${ONE_APPS_DIR:-${SCRIPT_DIR}/build/one-apps}"
 PACKER_DIR="${SCRIPT_DIR}/build/packer"
 HEADLESS="${HEADLESS:-true}"
 VERSION="${VERSION:-1.0.0}"
-APPLIANCE_NAME="slm-copilot"
+APPLIANCE_NAME="eurocopilot"
 IMAGE_NAME="${APPLIANCE_NAME}-${VERSION}.qcow2"
 
 UBUNTU_IMAGE_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
@@ -106,7 +106,7 @@ generate_checksums() {
 }
 
 main() {
-    echo "==> SLM-Copilot Build (v${VERSION})"
+    echo "==> EuroCopilot Build (v${VERSION})"
     echo ""
 
     check_dependencies

@@ -1,4 +1,4 @@
-# Virt8ra Demo: Multi-Site SLM-Copilot Deployment
+# Virt8ra Demo: Multi-Site EuroCopilot Deployment
 
 Sovereign AI coding copilot running Devstral Small 2 (24B) on CPU across multiple OpenNebula zones, federated through a central LiteLLM load balancer.
 
@@ -27,7 +27,7 @@ Sovereign AI coding copilot running Devstral Small 2 (24B) on CPU across multipl
 
 Each site has:
   - VR VM (.99) running Tailscale as subnet router
-  - SLM-Copilot VM (.100) running llama-server
+  - EuroCopilot VM (.100) running llama-server
   - virbr0 bridge on 192.168.{SITE_ID}.0/24
 ```
 
@@ -56,7 +56,7 @@ Convention: site ID increments per site (101, 102, 103, 104...). VR is always `.
 ### Prerequisites
 
 - SSH access to the new OpenNebula host
-- The SLM-Copilot QCOW2 image (transfer from France)
+- The EuroCopilot QCOW2 image (transfer from France)
 - A Tailscale account with access to the tailnet
 
 ### Step 1: Prepare the Host
@@ -96,7 +96,7 @@ sudo virsh net-autostart default
 
 ```bash
 cat > /tmp/vnet.txt << 'EOF'
-NAME="slm-copilot-net"
+NAME="eurocopilot-net"
 VN_MAD="bridge"
 BRIDGE="virbr0"
 BRIDGE_TYPE="linux"
@@ -128,21 +128,21 @@ oneimage create \
 
 Wait for `oneimage show 0 | grep STATE` to show `rdy`.
 
-### Step 4: Transfer SLM-Copilot Image
+### Step 4: Transfer EuroCopilot Image
 
 From the France host (use **public IPs**, Tailscale is too slow ~200KB/s vs ~57MB/s):
 
 ```bash
 # On France host
-scp -i KEY /var/lib/one/datastores/1/IMAGE_HASH user@NEW_HOST_PUBLIC_IP:/var/tmp/slm-copilot.qcow2
+scp -i KEY /var/lib/one/datastores/1/IMAGE_HASH user@NEW_HOST_PUBLIC_IP:/var/tmp/eurocopilot.qcow2
 ```
 
 Register the image on the new host:
 
 ```bash
 oneimage create \
-  --name "slm-copilot-2.3" \
-  --path /var/tmp/slm-copilot.qcow2 \
+  --name "eurocopilot-2.3" \
+  --path /var/tmp/eurocopilot.qcow2 \
   --prefix vd --datastore default --type OS --size 61440
 ```
 
@@ -256,7 +256,7 @@ echo 1 > /proc/sys/net/ipv4/ip_forward
 
 ```ini
 [Unit]
-Description=Cross-site routes via VR for SLM-Copilot
+Description=Cross-site routes via VR for EuroCopilot
 After=network.target libvirtd.service
 
 [Service]
@@ -277,11 +277,11 @@ systemctl daemon-reload
 systemctl enable cross-site-routes.service
 ```
 
-### Step 8: Create SLM-Copilot VM
+### Step 8: Create EuroCopilot VM
 
 ```bash
 cat > /tmp/copilot-vm.txt << 'EOF'
-NAME="SLM-Copilot {SITE_NAME}"
+NAME="EuroCopilot {SITE_NAME}"
 CPU="{VCPU_COUNT}"
 VCPU="{VCPU_COUNT}"
 MEMORY="32768"
@@ -351,7 +351,7 @@ curl -sk -X POST "https://192.168.101.101:8443/model/new" \
     "model_name": "devstral-small-2-{SITE_NAME}",
     "litellm_params": {
       "model": "openai/devstral-small-2-{SITE_NAME}",
-      "api_key": "<backend API key from /var/lib/slm-copilot/password>",
+      "api_key": "<backend API key from /var/lib/eurocopilot/password>",
       "api_base": "https://192.168.{SITE_ID}.100:8443/v1",
       "ssl_verify": false
     },

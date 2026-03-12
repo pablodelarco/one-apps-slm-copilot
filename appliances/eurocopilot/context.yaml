@@ -1,6 +1,6 @@
 ---
 :tests:
-  :image_name: slm-copilot
+  :image_name: eurocopilot
   :type: single
   :microenvs:
     - name: default
