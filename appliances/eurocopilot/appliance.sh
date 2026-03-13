@@ -799,14 +799,14 @@ service_bootstrap() {
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
     attempt_letsencrypt
 
-    # 2. Enable and start llama-server
-    systemctl enable eurocopilot.service
-    systemctl start eurocopilot.service
-
-    # 3. Wait for llama-server readiness (port depends on mode)
+    # 2. Enable and start llama-server (skip in LB mode -- LB is a pure proxy)
     if is_lb_mode; then
-        wait_for_llama_local
+        systemctl disable eurocopilot.service 2>/dev/null || true
+        log_copilot info "LB mode: skipping local llama-server (pure proxy)"
     else
+        systemctl enable eurocopilot.service
+        systemctl start eurocopilot.service
+        # 3. Wait for llama-server readiness
         wait_for_llama
     fi
 
@@ -1213,17 +1213,11 @@ generate_litellm_config() {
     local _local_password
     _local_password=$(cat "${LLAMA_DATA_DIR}/password" 2>/dev/null || echo 'changeme')
 
-    # Local backend is always in config (not deletable from UI).
-    # Remote backends are registered via API/DB so they can be managed from UI.
+    # LB is a pure proxy -- no local llama-server.
+    # All backends (including any local standalone VM) are registered via API/DB
+    # so they can be managed from the UI.
     cat > "${LITELLM_CONFIG}" <<EOF
-model_list:
-  - model_name: "${ACTIVE_MODEL_ID}"
-    litellm_params:
-      model: "openai/${ACTIVE_MODEL_ID}"
-      api_base: "http://127.0.0.1:${LLAMA_PORT_LOCAL}/v1"
-      api_key: "${_local_password}"
-    model_info:
-      id: "${ACTIVE_MODEL_ID}-local"
+model_list: []
 EOF
 
     # Append router and general settings
@@ -1249,7 +1243,7 @@ environment_variables:
 EOF
 
     chmod 0600 "${LITELLM_CONFIG}"
-    log_copilot info "LiteLLM config generated: 1 local + ${_i} remote backend(s)"
+    log_copilot info "LiteLLM config generated (pure proxy, backends via API)"
 }
 
 # ==========================================================================
