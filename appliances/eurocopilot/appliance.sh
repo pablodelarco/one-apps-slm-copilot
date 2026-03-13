@@ -266,7 +266,7 @@ register_with_lb() {
     local _model_id="${ONEAPP_COPILOT_REGISTER_MODEL_NAME:-}"
     if [[ -z "${_model_id}" ]]; then
         _load_model_info
-        _model_id="${_ACTIVE_MODEL_ID:-devstral}"
+        _model_id="${ACTIVE_MODEL_ID:-devstral-small-2}"
     fi
 
     # Strip trailing slash from LB URL
