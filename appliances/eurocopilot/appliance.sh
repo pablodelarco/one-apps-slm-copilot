@@ -587,11 +587,11 @@ ARGS=(
     --threads "${LLAMA_THREADS}"
     --flash-attn on
     --jinja
-    --mlock
     --metrics
     --prio 2
     --api-key "${LLAMA_API_KEY}"
 )
+[ "${LLAMA_MLOCK}" = "on" ] && ARGS+=(--mlock)
 [ -n "${LLAMA_SSL_KEY}" ] && ARGS+=(--ssl-key-file "${LLAMA_SSL_KEY}" --ssl-cert-file "${LLAMA_SSL_CERT}")
 exec /usr/local/bin/llama-server "${ARGS[@]}"
 WRAPPER_EOF
@@ -799,14 +799,14 @@ service_bootstrap() {
     # 1. Attempt Let's Encrypt before starting llama-server (port 80 is free)
     attempt_letsencrypt
 
-    # 2. Enable and start llama-server (skip in LB mode -- LB is a pure proxy)
+    # 2. Enable and start llama-server (both standalone and LB modes)
+    systemctl enable eurocopilot.service
+    systemctl start eurocopilot.service
+
+    # 3. Wait for llama-server readiness
     if is_lb_mode; then
-        systemctl disable eurocopilot.service 2>/dev/null || true
-        log_copilot info "LB mode: skipping local llama-server (pure proxy)"
+        wait_for_llama_local
     else
-        systemctl enable eurocopilot.service
-        systemctl start eurocopilot.service
-        # 3. Wait for llama-server readiness
         wait_for_llama
     fi
 
@@ -1127,12 +1127,15 @@ generate_llama_env() {
     local _ssl_key="${LLAMA_CERT_DIR}/key.pem"
     local _ssl_cert="${LLAMA_CERT_DIR}/cert.pem"
 
+    local _mlock="on"
     if is_lb_mode; then
         _host="127.0.0.1"
         _port="${LLAMA_PORT_LOCAL}"
         _ssl_key=""
         _ssl_cert=""
-        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS)"
+        _mlock="off"
+        ONEAPP_COPILOT_CONTEXT_SIZE=8192
+        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS, ctx=8192, mlock=off)"
     fi
 
     mkdir -p /etc/eurocopilot
@@ -1146,6 +1149,7 @@ LLAMA_THREADS=${_threads}
 LLAMA_SSL_KEY=${_ssl_key}
 LLAMA_SSL_CERT=${_ssl_cert}
 LLAMA_API_KEY=${_password}
+LLAMA_MLOCK=${_mlock}
 SLM_SSL_KEY=${LLAMA_CERT_DIR}/key.pem
 SLM_SSL_CERT=${LLAMA_CERT_DIR}/cert.pem
 EOF
@@ -1213,11 +1217,17 @@ generate_litellm_config() {
     local _local_password
     _local_password=$(cat "${LLAMA_DATA_DIR}/password" 2>/dev/null || echo 'changeme')
 
-    # LB is a pure proxy -- no local llama-server.
-    # All backends (including any local standalone VM) are registered via API/DB
-    # so they can be managed from the UI.
+    # Local backend is always in config (not deletable from UI).
+    # Remote backends are registered via API/DB so they can be managed from UI.
     cat > "${LITELLM_CONFIG}" <<EOF
-model_list: []
+model_list:
+  - model_name: "${ACTIVE_MODEL_ID}"
+    litellm_params:
+      model: "openai/${ACTIVE_MODEL_ID}"
+      api_base: "http://127.0.0.1:${LLAMA_PORT_LOCAL}/v1"
+      api_key: "${_local_password}"
+    model_info:
+      id: "${ACTIVE_MODEL_ID}-local"
 EOF
 
     # Append router and general settings
