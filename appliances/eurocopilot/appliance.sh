@@ -37,6 +37,7 @@ ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_REGISTER_URL'            'configure' 'Remote LB URL for auto-registration'                  ''
     'ONEAPP_COPILOT_REGISTER_KEY'     'configure' 'Remote LB master key for auto-registration'           ''
     'ONEAPP_COPILOT_REGISTER_MODEL_NAME' 'configure' 'Model name override for LB registration'           ''
+    'ONEAPP_COPILOT_REGISTER_SITE_NAME'  'configure' 'Site name for LB backend ID (e.g. poland0)'        ''
 )
 
 # --------------------------------------------------------------------------
@@ -52,6 +53,7 @@ ONEAPP_COPILOT_LB_BACKENDS="${ONEAPP_COPILOT_LB_BACKENDS:-}"
 ONEAPP_COPILOT_REGISTER_URL="${ONEAPP_COPILOT_REGISTER_URL:-}"
 ONEAPP_COPILOT_REGISTER_KEY="${ONEAPP_COPILOT_REGISTER_KEY:-}"
 ONEAPP_COPILOT_REGISTER_MODEL_NAME="${ONEAPP_COPILOT_REGISTER_MODEL_NAME:-}"
+ONEAPP_COPILOT_REGISTER_SITE_NAME="${ONEAPP_COPILOT_REGISTER_SITE_NAME:-}"
 
 # --------------------------------------------------------------------------
 # Constants
@@ -272,7 +274,11 @@ register_with_lb() {
     # Strip trailing slash from LB URL
     _lb_url="${_lb_url%/}"
 
-    log_copilot info "Registering with remote LB at ${_lb_url} (model=${_model_id}, ip=${_my_ip})"
+    # Build backend ID: prefer site name, fall back to IP
+    local _backend_suffix="${ONEAPP_COPILOT_REGISTER_SITE_NAME:-${_my_ip}}"
+    local _backend_id="${_model_id}-${_backend_suffix}"
+
+    log_copilot info "Registering with remote LB at ${_lb_url} (model=${_model_id}, id=${_backend_id})"
 
     local _response
     _response=$(curl -sk -w '\n%{http_code}' -X POST "${_lb_url}/model/new" \
@@ -286,7 +292,7 @@ register_with_lb() {
                 \"api_base\": \"https://${_my_ip}:${LLAMA_PORT}/v1\"
             },
             \"model_info\": {
-                \"id\": \"${_model_id}-${_my_ip}\"
+                \"id\": \"${_backend_id}\"
             }
         }" 2>/dev/null) || true
 
@@ -297,13 +303,13 @@ register_with_lb() {
 
     if [[ "${_http_code}" == "200" ]] || [[ "${_http_code}" == "201" ]]; then
         # Save the model identifier for deregistration
-        echo "${_model_id}-${_my_ip}" > "${LB_MODEL_ID_FILE}"
+        echo "${_backend_id}" > "${LB_MODEL_ID_FILE}"
         chmod 600 "${LB_MODEL_ID_FILE}"
 
         # Write deregister script for shutdown
         _write_deregister_script "${_lb_url}" "${_lb_key}"
 
-        log_copilot info "Successfully registered with LB (model_id=${_model_id}-${_my_ip})"
+        log_copilot info "Successfully registered with LB (id=${_backend_id})"
     else
         log_copilot warning "LB registration failed (HTTP ${_http_code}): ${_body}"
     fi

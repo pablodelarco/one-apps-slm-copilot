@@ -74,6 +74,8 @@ opennebula_template:
     ONEAPP_COPILOT_LB_BACKENDS: '$ONEAPP_COPILOT_LB_BACKENDS'
     ONEAPP_COPILOT_REGISTER_URL: '$ONEAPP_COPILOT_REGISTER_URL'
     ONEAPP_COPILOT_REGISTER_KEY: '$ONEAPP_COPILOT_REGISTER_KEY'
+    ONEAPP_COPILOT_REGISTER_MODEL_NAME: '$ONEAPP_COPILOT_REGISTER_MODEL_NAME'
+    ONEAPP_COPILOT_REGISTER_SITE_NAME: '$ONEAPP_COPILOT_REGISTER_SITE_NAME'
   CPU: '16'
   VCPU: '16'
   CPU_MODEL:
@@ -94,6 +96,8 @@ opennebula_template:
     ONEAPP_COPILOT_TLS_DOMAIN,
     ONEAPP_COPILOT_REGISTER_URL,
     ONEAPP_COPILOT_REGISTER_KEY,
+    ONEAPP_COPILOT_REGISTER_MODEL_NAME,
+    ONEAPP_COPILOT_REGISTER_SITE_NAME,
     ONEAPP_COPILOT_LB_ENABLED,
     ONEAPP_COPILOT_LB_BACKENDS
   user_inputs:
@@ -115,6 +119,10 @@ opennebula_template:
       O|text|Remote LB URL for auto-registration (e.g. https://lb:8443)||
     oneapp_copilot_register_key: >-
       O|password|Remote LB master key for auto-registration||
+    oneapp_copilot_register_model_name: >-
+      O|text|Model name for LB registration (empty = auto)||
+    oneapp_copilot_register_site_name: >-
+      O|text|Site name for LB backend ID (e.g. poland0)||
 logo: eurocopilot.png
 images:
   - name: eurocopilot_os
