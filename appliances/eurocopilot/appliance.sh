@@ -810,22 +810,31 @@ service_bootstrap() {
         wait_for_llama
     fi
 
-    # 3b. Add cross-site routes via local VR for multi-site LB
+    # 3b. Add persistent cross-site routes via local VR for multi-site LB
     #     VR VM lives at .99 on each site subnet and handles Tailscale
     #     subnet routing.  The local /24 is more specific so local
     #     traffic is unaffected.  192.168.96.0/20 covers sites 96-111
     #     (all current site subnets 101-109).
+    #     Uses a netplan drop-in so the route survives reboots and does
+    #     not depend on VR being reachable at boot time.
     if is_lb_mode; then
         local _gw _vr_ip
         _gw=$(ip route show default | awk '{print $3; exit}')
         _vr_ip="${_gw%.*}.99"
-        if ip route get "$_vr_ip" &>/dev/null && \
-           ping -c1 -W2 "$_vr_ip" &>/dev/null; then
-            ip route replace 192.168.96.0/20 via "$_vr_ip" 2>/dev/null && \
-                log_copilot info "Cross-site route added: 192.168.96.0/20 via ${_vr_ip} (VR)"
-        else
-            log_copilot warn "VR at ${_vr_ip} unreachable -- skipping cross-site routes"
-        fi
+        cat > /etc/netplan/60-cross-site.yaml <<CROSSEOF
+# Cross-site routing for LB mode -- route all site subnets via local VR
+network:
+  version: 2
+  ethernets:
+    ens3:
+      routes:
+        - to: 192.168.96.0/20
+          via: ${_vr_ip}
+          metric: 100
+CROSSEOF
+        chmod 600 /etc/netplan/60-cross-site.yaml
+        netplan apply 2>/dev/null
+        log_copilot info "Cross-site route persisted: 192.168.96.0/20 via ${_vr_ip} (netplan)"
     fi
 
     # 4. Start LiteLLM proxy if in LB mode
@@ -838,9 +847,13 @@ service_bootstrap() {
         # 4b. Start health check timer to cull dead remote backends
         _setup_lb_healthcheck
     else
-        # Standalone mode: stop health check timer if leftover from LB mode
+        # Standalone mode: clean up LB-mode leftovers
         systemctl stop eurocopilot-lb-healthcheck.timer 2>/dev/null || true
         systemctl disable eurocopilot-lb-healthcheck.timer 2>/dev/null || true
+        if [ -f /etc/netplan/60-cross-site.yaml ]; then
+            rm -f /etc/netplan/60-cross-site.yaml
+            netplan apply 2>/dev/null
+        fi
     fi
 
     # 5. Write report file with connection info, credentials, client config
