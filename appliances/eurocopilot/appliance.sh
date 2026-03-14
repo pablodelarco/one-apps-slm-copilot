@@ -813,15 +813,16 @@ service_bootstrap() {
     # 3b. Add cross-site routes via local VR for multi-site LB
     #     VR VM lives at .99 on each site subnet and handles Tailscale
     #     subnet routing.  The local /24 is more specific so local
-    #     traffic is unaffected.  192.168.100.0/21 covers sites 100-107.
+    #     traffic is unaffected.  192.168.96.0/20 covers sites 96-111
+    #     (all current site subnets 101-109).
     if is_lb_mode; then
         local _gw _vr_ip
         _gw=$(ip route show default | awk '{print $3; exit}')
         _vr_ip="${_gw%.*}.99"
         if ip route get "$_vr_ip" &>/dev/null && \
            ping -c1 -W2 "$_vr_ip" &>/dev/null; then
-            ip route replace 192.168.100.0/21 via "$_vr_ip" 2>/dev/null && \
-                log_copilot info "Cross-site route added: 192.168.100.0/21 via ${_vr_ip} (VR)"
+            ip route replace 192.168.96.0/20 via "$_vr_ip" 2>/dev/null && \
+                log_copilot info "Cross-site route added: 192.168.96.0/20 via ${_vr_ip} (VR)"
         else
             log_copilot warn "VR at ${_vr_ip} unreachable -- skipping cross-site routes"
         fi
