@@ -4,6 +4,31 @@ All notable changes to the EuroCopilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.6.0] - 2026-03-15
+
+### Fixed
+
+- Cross-site routes now use a netplan drop-in (`60-cross-site.yaml`) that survives
+  reboots and works regardless of whether the VR is reachable at boot time. Replaces
+  the fragile ping-gated `ip route replace` approach.
+- Corrected cross-site CIDR from /21 (invalid, silently masked to 96-103) to /20
+  (covers all site subnets 101-109).
+- Standalone mode cleanup removes cross-site netplan drop-in when switching from
+  LB mode.
+
+### Changed
+
+- LB mode local llama-server restored with reduced footprint (ctx_size=8192,
+  mlock=off) for co-located inference alongside LiteLLM proxy.
+- REGISTER_SITE_NAME context variable for friendly LB backend IDs
+  (e.g. `devstral-small-2-poland0` instead of `devstral-small-2-<uuid>`).
+
+### Notes
+
+- VM templates MUST include `CPU_MODEL=[MODEL="host-passthrough"]` for usable
+  inference performance. Without it, QEMU exposes a generic CPU (SSE2 only),
+  resulting in ~20x slower inference.
+
 ## [2.3.0] - 2026-03-07
 
 ### Changed
