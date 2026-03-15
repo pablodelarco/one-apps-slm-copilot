@@ -10,7 +10,7 @@ Sovereign AI coding copilot running Devstral Small 2 (24B) on CPU across multipl
                           port 8443 (TLS)
                                 |
                     +-----------v-----------+
-                    |   France LB (LiteLLM) |  192.168.101.101
+                    |   France LB (LiteLLM) |  192.168.101.100
                     |   + local llama-server |
                     +-----------+-----------+
                           |     |     |
@@ -22,7 +22,6 @@ Sovereign AI coding copilot running Devstral Small 2 (24B) on CPU across multipl
    | Poland       |  | UK           |  | Spain        |
    | 192.168.102  |  | 192.168.103  |  | 192.168.104  |
    | .100 backend |  | .100 backend |  | .100 backend |
-   | 15 vCPU      |  | 8 vCPU       |  | 20 vCPU      |
    +--------------+  +--------------+  +--------------+
 
 Each site has:
@@ -36,20 +35,24 @@ Each site has:
 | Site | Subnet | Host IP (public) | Host SSH | VR Tailscale | Backend Model Name |
 |------|--------|-------------------|----------|--------------|-------------------|
 | France (LB) | 192.168.101.0/24 | 195.154.103.94 | `ssh root@100.123.42.13` | vr-france | devstral-small-2 |
-| Poland | 192.168.102.0/24 | 151.115.91.50 | `ssh root@100.84.125.71` | vr-poland | devstral-small-2-poland |
+| Poland | 192.168.102.0/24 | 151.115.91.50 | `ssh root@100.84.125.71` | vr-poland | devstral-small-2-poland0 |
 | UK | 192.168.103.0/24 | 57.128.188.10 | `ssh root@100.94.160.40` | vr-uk | devstral-small-2-uk |
-| Spain | 192.168.104.0/24 | 185.99.184.102 | `ssh -i KEY ubuntu@185.99.184.102` | vr-spain | devstral-small-2-spain |
-| Canada | 192.168.105.0/24 | 148.113.216.22 | `ssh -i virt8rakey ubuntu@148.113.216.22` | vr-canada (100.71.63.11) | devstral-small-2-canada |
-| Australia | 192.168.106.0/24 | 51.161.174.156 | `ssh -i virt8rakey ubuntu@51.161.174.156` | vr-australia (100.69.244.60) | devstral-small-2-australia |
+| Spain0 | 192.168.104.0/24 | 185.99.184.102 | `ssh root@100.103.28.124` | vr-spain | devstral-small-2-spain0 |
+| Canada | 192.168.105.0/24 | 148.113.216.22 | `ssh root@100.70.244.107` | vr-canada | devstral-small-2-canada |
+| Australia | 192.168.106.0/24 | 51.161.174.156 | `ssh root@100.105.18.119` | vr-australia | devstral-small-2-australia |
+| Germany0 | 192.168.107.0/24 | - | `ssh root@100.111.23.114` | vr-germany0 | devstral-small-2-germany0 |
+| Germany1 | 192.168.108.0/24 | - | `ssh root@100.115.120.119` | vr-germany1 | devstral-small-2-germany1 |
+| Spain1 | 192.168.109.0/24 | - | `ssh root@100.87.77.120` | vr-spain1 | devstral-small-2-spain1 |
 
 Convention: site ID increments per site (101, 102, 103, 104...). VR is always `.99`, first backend is `.100`.
 
 ## France LB Details
 
-- VM 77 at 192.168.101.101, API key: `sk-latJ1aJrSQWGkQW6TCY6he52262nT6a9PNpgaUJOQf8Sop7X`
+- VM 95 at 192.168.101.100
 - LiteLLM proxy on 0.0.0.0:8443, local llama-server on 127.0.0.1:8444
-- Web UI: https://192.168.101.101:8443/ui (admin / api_key)
+- Web UI: https://192.168.101.100:8443/ui (admin / api_key)
 - Remote backends register via LiteLLM `/model/new` API on boot
+- All backends share `model_name=devstral-small-2` with least-busy routing
 
 ---
 
@@ -63,7 +66,7 @@ Convention: site ID increments per site (101, 102, 103, 104...). VR is always `.
 
 ### Step 1: Prepare the Host
 
-Choose the next subnet ID (e.g., 192.168.105.0/24 for site 5).
+Choose the next subnet ID (e.g., 192.168.110.0/24 for the next site).
 
 ```bash
 # Extend root LV (Ubuntu defaults to 100G even on large disks)
@@ -143,7 +146,7 @@ Register the image on the new host:
 
 ```bash
 oneimage create \
-  --name "eurocopilot-2.3" \
+  --name "eurocopilot-2.6" \
   --path /var/tmp/eurocopilot.qcow2 \
   --prefix vd --datastore default --type OS --size 61440
 ```
@@ -154,7 +157,7 @@ Wait for `rdy` state. If scheduling fails with "Not enough capacity", run `oneho
 
 ```bash
 cat > /tmp/vr-vm.txt << 'EOF'
-NAME="vr-tailscale"
+NAME="Virtual Router"
 CPU="1"
 VCPU="1"
 MEMORY="1024"
@@ -171,7 +174,48 @@ EOF
 onevm create /tmp/vr-vm.txt
 ```
 
-### Step 6: Configure VR (Tailscale)
+### Step 6: Fix Tailscale Table 52 Routing Conflict (CRITICAL)
+
+**This step MUST be done on the host before configuring Tailscale on the VR.**
+
+When the VR advertises its local subnet via Tailscale, the host's Tailscale client adds a route for that subnet in routing table 52 (via tailscale0). Since table 52 has higher priority than the main table, this overrides the local virbr0 route. The result: the host sends traffic destined for its own VMs through tailscale0 instead of the local bridge, breaking all host-to-VM and VM-to-internet connectivity.
+
+**Symptoms:** Host can ARP the VR (L2 works) but cannot ping or SSH to it (L3 fails). VR cannot reach the internet. `ip route get 192.168.{SITE_ID}.99` shows `dev tailscale0` instead of `dev virbr0`.
+
+**Fix:** Add an ip rule that forces the local subnet to use the main routing table (which has the virbr0 route) before Tailscale's table 52.
+
+```bash
+# Apply immediately
+ip rule add to 192.168.{SITE_ID}.0/24 priority 5260 lookup main
+
+# Verify: this should show "dev virbr0", NOT "dev tailscale0"
+ip route get 192.168.{SITE_ID}.99
+```
+
+**Persist with a systemd service** (`/etc/systemd/system/ip-rule-copilot.service`):
+
+```ini
+[Unit]
+Description=IP rule for copilot local subnet (prevent Tailscale table 52 override)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip rule add to 192.168.{SITE_ID}.0/24 priority 5260 lookup main
+ExecStop=/sbin/ip rule del to 192.168.{SITE_ID}.0/24 priority 5260 lookup main
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload
+systemctl enable ip-rule-copilot.service
+```
+
+### Step 7: Configure VR (Tailscale)
 
 SSH into the VR from the host:
 
@@ -203,9 +247,9 @@ sleep 2
 tailscale up --advertise-routes=192.168.{SITE_ID}.0/24 --hostname=vr-{SITE_NAME} --accept-routes
 ```
 
-This prints a URL - visit it to authenticate. Then **approve the subnet route** in the Tailscale admin console (https://login.tailscale.com/admin/machines).
+This prints a URL. Visit it to authenticate, then **approve the subnet route** in the Tailscale admin console (https://login.tailscale.com/admin/machines).
 
-**Create the OpenRC init script** (copy this file to `/etc/init.d/tailscale`):
+**Create the OpenRC init script** (write to `/etc/init.d/tailscale`):
 
 ```bash
 #!/sbin/openrc-run
@@ -242,15 +286,58 @@ chmod +x /etc/init.d/tailscale
 rc-update add tailscale default
 ```
 
-### Step 7: Add Cross-Site Routes on Backend Host
+### Step 8: Persist Cross-Site Routes on the VR
 
-The backend host needs static routes to reach other sites via the VR VM:
+Even with `--accept-routes`, some Alpine VRs do not auto-populate routing table 52 with peer subnet routes. This means the VR can originate traffic to other sites, but forwarded traffic from local VMs does not get routed back correctly.
+
+**Check if table 52 has the peer subnets:**
+
+```bash
+ip route show table 52 | grep 192.168
+```
+
+If you see routes like `192.168.101.0/24 dev tailscale0` for each peer site, accept-routes is working and you can skip this step.
+
+If table 52 only has 100.x.y.z entries (Tailscale IPs) but no 192.168.x.0/24 entries, you need to add them manually.
+
+**Create `/etc/local.d/cross-site-routes.start`:**
+
+```bash
+#!/bin/sh
+# Add cross-site subnet routes to table 52 for forwarded traffic.
+# Tailscale accept-routes should do this automatically, but some
+# Alpine VRs (observed on older Tailscale versions) don't populate
+# table 52 with peer subnet routes.
+
+sleep 5  # wait for tailscale0 to be up
+
+ip route add 192.168.101.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.102.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.103.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.104.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.105.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.106.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.107.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.108.0/24 dev tailscale0 table 52 2>/dev/null
+ip route add 192.168.109.0/24 dev tailscale0 table 52 2>/dev/null
+```
+
+```bash
+chmod +x /etc/local.d/cross-site-routes.start
+rc-update add local default
+```
+
+Adding a route that already exists returns an error (harmless with `2>/dev/null`), so this script is safe to run on all VRs regardless of whether accept-routes works.
+
+### Step 9: Add Cross-Site Routes on the Host
+
+The host needs static routes to reach other sites via the VR VM:
 
 ```bash
 ip route add 192.168.101.0/24 via 192.168.{SITE_ID}.99 dev virbr0
 ip route add 192.168.102.0/24 via 192.168.{SITE_ID}.99 dev virbr0
 ip route add 192.168.103.0/24 via 192.168.{SITE_ID}.99 dev virbr0
-# ... add for all other site subnets
+# ... add for all other site subnets (skip your own SITE_ID)
 echo 1 > /proc/sys/net/ipv4/ip_forward
 ```
 
@@ -268,6 +355,12 @@ ExecStart=/bin/bash -c "sleep 10; \
   ip route add 192.168.101.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
   ip route add 192.168.102.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
   ip route add 192.168.103.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
+  ip route add 192.168.104.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
+  ip route add 192.168.105.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
+  ip route add 192.168.106.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
+  ip route add 192.168.107.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
+  ip route add 192.168.108.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
+  ip route add 192.168.109.0/24 via 192.168.{SITE_ID}.99 dev virbr0 2>/dev/null; \
   echo 1 > /proc/sys/net/ipv4/ip_forward"
 
 [Install]
@@ -279,7 +372,7 @@ systemctl daemon-reload
 systemctl enable cross-site-routes.service
 ```
 
-### Step 8: Create EuroCopilot VM
+### Step 10: Create EuroCopilot VM
 
 ```bash
 cat > /tmp/copilot-vm.txt << 'EOF'
@@ -298,9 +391,10 @@ CONTEXT=[
   ONEAPP_COPILOT_AI_MODEL="Devstral Small 2 (24B ~14GB built-in)",
   ONEAPP_COPILOT_CONTEXT_SIZE="32768",
   ONEAPP_COPILOT_CPU_THREADS="0",
-  ONEAPP_COPILOT_REGISTER_KEY="sk-latJ1aJrSQWGkQW6TCY6he52262nT6a9PNpgaUJOQf8Sop7X",
+  ONEAPP_COPILOT_REGISTER_KEY="<LB master API key>",
   ONEAPP_COPILOT_REGISTER_MODEL_NAME="devstral-small-2-{SITE_NAME}",
-  ONEAPP_COPILOT_REGISTER_URL="https://192.168.101.101:8443",
+  ONEAPP_COPILOT_REGISTER_SITE_NAME="{SITE_NAME}",
+  ONEAPP_COPILOT_REGISTER_URL="https://192.168.101.100:8443",
   SSH_PUBLIC_KEY="<oneadmin public key>"
 ]
 EOF
@@ -309,7 +403,9 @@ onevm create /tmp/copilot-vm.txt
 
 The VM will bootstrap automatically: download model, start llama-server, generate API key, and register with the France LB.
 
-### Step 9: Update France LB Host (CRITICAL)
+**Important:** `REGISTER_KEY` must be the LB's master API key (its `ONEAPP_COPILOT_API_PASSWORD`), not any other key.
+
+### Step 11: Update France LB Host (CRITICAL)
 
 The France host has a catch-all DNAT rule that redirects all port-8443 traffic to the LB VM. Without a NETMAP exception, cross-site traffic from the LB to the new backend gets redirected back to itself.
 
@@ -329,25 +425,34 @@ iptables-legacy -t nat -A POSTROUTING \
 
 **Update the persistent service** at `/etc/systemd/system/iptables-nat-copilot.service` to include the new subnet, then `systemctl daemon-reload`.
 
-### Step 10: Verify
+### Step 12: Verify
 
 ```bash
+# From the host, verify connectivity to the VR
+ping -c 2 192.168.{SITE_ID}.99
+
+# From the VR, verify internet and cross-site
+sudo -u oneadmin ssh root@192.168.{SITE_ID}.99
+ping -c 1 8.8.8.8                    # internet
+ping -c 1 192.168.101.100            # France LB
+tailscale status | grep vr-          # all VRs visible
+
 # Check model list on LB
-curl -sk -H "Authorization: Bearer sk-latJ1aJrSQWGkQW6TCY6he52262nT6a9PNpgaUJOQf8Sop7X" \
-  https://192.168.101.101:8443/v1/models | python3 -m json.tool
+curl -sk -H "Authorization: Bearer <LB_API_KEY>" \
+  https://192.168.101.100:8443/v1/models | python3 -m json.tool
 
 # Test inference through new backend
-curl -sk -H "Authorization: Bearer sk-latJ1aJrSQWGkQW6TCY6he52262nT6a9PNpgaUJOQf8Sop7X" \
+curl -sk -H "Authorization: Bearer <LB_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"model":"devstral-small-2-{SITE_NAME}","messages":[{"role":"user","content":"Hello"}],"max_tokens":20}' \
-  https://192.168.101.101:8443/v1/chat/completions
+  https://192.168.101.100:8443/v1/chat/completions
 ```
 
 If registration didn't happen automatically (stuck curl due to routes not being ready), manually register:
 
 ```bash
-curl -sk -X POST "https://192.168.101.101:8443/model/new" \
-  -H "Authorization: Bearer sk-latJ1aJrSQWGkQW6TCY6he52262nT6a9PNpgaUJOQf8Sop7X" \
+curl -sk -X POST "https://192.168.101.100:8443/model/new" \
+  -H "Authorization: Bearer <LB_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "model_name": "devstral-small-2-{SITE_NAME}",
@@ -366,6 +471,63 @@ curl -sk -X POST "https://192.168.101.101:8443/model/new" \
 ---
 
 ## Troubleshooting
+
+### Host cannot ping or SSH to VR (L2 works, L3 fails)
+
+**Cause:** Tailscale routing table 52 overrides the local virbr0 route. When the VR advertises its subnet via Tailscale, the host's table 52 gets a route for that subnet via tailscale0, taking precedence over the main table's virbr0 route.
+
+**Debug:**
+```bash
+# Check where traffic to the VR is actually going
+ip route get 192.168.{SITE_ID}.99
+# If it shows "dev tailscale0" instead of "dev virbr0", this is the issue
+
+# Verify with arping (L2 should work even when L3 doesn't)
+arping -c 2 -I virbr0 192.168.{SITE_ID}.99
+```
+
+**Fix:** See Step 6 (ip-rule-copilot.service).
+
+### VR has no internet connectivity
+
+**Cause:** Usually the table 52 routing conflict above. The host can't forward VR traffic to the internet because it's trying to route it through tailscale0.
+
+**Fix:** Apply the ip rule fix (Step 6), then restart Tailscale on the VR:
+```bash
+sudo -u oneadmin ssh root@192.168.{SITE_ID}.99
+rc-service tailscale restart
+```
+
+### VR Tailscale shows "NoState" or won't connect
+
+**Cause:** Tailscale daemon restarted but lost its authentication state, or cannot reach the coordination server (no internet).
+
+**Fix:** Ensure the VR has internet (see above), then re-authenticate:
+```bash
+tailscale up --advertise-routes=192.168.{SITE_ID}.0/24 --hostname=vr-{SITE_NAME} --accept-routes
+```
+
+If you can't SSH to the VR, use the QEMU guest agent from the host:
+```bash
+virsh qemu-agent-command <vm-name> \
+  '{"execute":"guest-exec","arguments":{"path":"/sbin/rc-service","arg":["tailscale","restart"],"capture-output":true}}'
+# Wait a few seconds, then check the result:
+virsh qemu-agent-command <vm-name> \
+  '{"execute":"guest-exec-status","arguments":{"pid":<PID_FROM_ABOVE>}}'
+```
+
+### Cross-site traffic works from VR but not from VMs behind it
+
+**Cause:** The VR's routing table 52 doesn't have peer subnet routes. Tailscale accept-routes should populate these, but some Alpine VRs don't.
+
+**Debug:**
+```bash
+# On the VR
+ip route show table 52 | grep 192.168
+# Should show 192.168.10x.0/24 entries for each peer site
+```
+
+**Fix:** See Step 8 (cross-site-routes.start script).
 
 ### Backend times out from LB
 
@@ -394,7 +556,7 @@ sudo -u oneadmin onehost forceupdate 0
 
 **Cause:** Cross-site routes weren't set up before the VM booted. The registration curl opens a TCP connection that never completes, and stays stuck even after routes are fixed.
 
-**Fix:** Kill the stuck curl, then manually register (see Step 10) or reboot the VM.
+**Fix:** Kill the stuck curl, then manually register (see Step 12) or reboot the VM.
 
 ### France host iptables commands fail with "incompatible, use nft"
 
