@@ -4,6 +4,25 @@ All notable changes to the EuroCopilot appliance will be documented in this file
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.7.0] - 2026-03-16
+
+### Fixed
+
+- Custom Jinja chat template for Devstral: fixes token leakage (`<s>`, `[INST]`
+  markers) and OpenHands role alternation errors (`Conversation roles must
+  alternate user/assistant`). Template enforces strict user/assistant alternation
+  with proper `[INST]`/`[/INST]` wrapping.
+
+### Changed
+
+- `--parallel 1` flag for llama-server: prevents CPU contention from concurrent
+  request processing, yielding ~2x speed boost on single-request workloads.
+- Default context size reduced from 32768 to 16384 tokens. Halves memory
+  pressure and KV cache allocation while remaining sufficient for most coding
+  tasks.
+- LiteLLM proxy timeouts increased to 600s (request) and 120s (health check)
+  to accommodate slow CPU inference without premature timeouts.
+
 ## [2.6.0] - 2026-03-15
 
 ### Fixed
