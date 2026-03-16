@@ -28,7 +28,7 @@ ONE_SERVICE_RECONFIGURABLE=true
 # --------------------------------------------------------------------------
 ONE_SERVICE_PARAMS=(
     'ONEAPP_COPILOT_AI_MODEL'         'configure' 'AI model selection'                          'Devstral Small 2 (24B ~14GB built-in)'
-    'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'              '32768'
+    'ONEAPP_COPILOT_CONTEXT_SIZE'  'configure' 'Model context window in tokens'              '16384'
     'ONEAPP_COPILOT_API_PASSWORD'       'configure' 'API key / Bearer token (auto-generated if empty)' ''
     'ONEAPP_COPILOT_TLS_DOMAIN'        'configure' 'FQDN for Let'\''s Encrypt certificate'       ''
     'ONEAPP_COPILOT_CPU_THREADS'       'configure' 'CPU threads for inference (0=auto-detect)'   '0'
@@ -44,7 +44,7 @@ ONE_SERVICE_PARAMS=(
 # Default value assignments
 # --------------------------------------------------------------------------
 ONEAPP_COPILOT_AI_MODEL="${ONEAPP_COPILOT_AI_MODEL:-Devstral Small 2 (24B ~14GB built-in)}"
-ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-32768}"
+ONEAPP_COPILOT_CONTEXT_SIZE="${ONEAPP_COPILOT_CONTEXT_SIZE:-16384}"
 ONEAPP_COPILOT_API_PASSWORD="${ONEAPP_COPILOT_API_PASSWORD:-}"
 ONEAPP_COPILOT_TLS_DOMAIN="${ONEAPP_COPILOT_TLS_DOMAIN:-}"
 ONEAPP_COPILOT_CPU_THREADS="${ONEAPP_COPILOT_CPU_THREADS:-0}"
@@ -576,6 +576,27 @@ service_install() {
 
     # 5. Create wrapper script (handles conditional TLS for standalone vs LB mode)
     mkdir -p /etc/eurocopilot
+    # Custom Jinja chat template: uses Devstral's native tokens ([INST]/[/INST])
+    # and merges consecutive same-role messages (required for OpenHands compatibility)
+    cat > /etc/eurocopilot/chat-template.jinja <<'JINJA_EOF'
+{%- for message in messages -%}
+  {%- if message.role == "system" -%}
+    [SYSTEM_PROMPT]{{ message.content }}[/SYSTEM_PROMPT]
+  {%- elif message.role == "user" -%}
+    {%- if loop.index0 > 0 and messages[loop.index0 - 1].role == "user" -%}
+{{ message.content }}
+    {%- else -%}
+[INST]{{ message.content }}
+    {%- endif -%}
+    {%- if loop.last or messages[loop.index0 + 1].role != "user" -%}
+[/INST]
+    {%- endif -%}
+  {%- elif message.role == "assistant" -%}
+{{ message.content }}</s>
+  {%- endif -%}
+{%- endfor -%}
+JINJA_EOF
+
     cat > /usr/local/bin/eurocopilot-start.sh <<'WRAPPER_EOF'
 #!/bin/bash
 source /etc/eurocopilot/env
@@ -587,8 +608,10 @@ ARGS=(
     --threads "${LLAMA_THREADS}"
     --flash-attn on
     --jinja
+    --chat-template-file /etc/eurocopilot/chat-template.jinja
     --metrics
     --prio 2
+    --parallel 1
     --api-key "${LLAMA_API_KEY}"
 )
 [ "${LLAMA_MLOCK}" = "on" ] && ARGS+=(--mlock)
@@ -1148,8 +1171,8 @@ generate_llama_env() {
         _ssl_key=""
         _ssl_cert=""
         _mlock="off"
-        ONEAPP_COPILOT_CONTEXT_SIZE=8192
-        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS, ctx=8192, mlock=off)"
+        ONEAPP_COPILOT_CONTEXT_SIZE=16384
+        log_copilot info "LB mode: llama-server on 127.0.0.1:${LLAMA_PORT_LOCAL} (no TLS, ctx=16384, mlock=off)"
     fi
 
     mkdir -p /etc/eurocopilot
@@ -1240,6 +1263,7 @@ model_list:
       model: "openai/${ACTIVE_MODEL_ID}"
       api_base: "http://127.0.0.1:${LLAMA_PORT_LOCAL}/v1"
       api_key: "${_local_password}"
+      timeout: 600
     model_info:
       id: "${ACTIVE_MODEL_ID}-local"
 EOF
@@ -1251,10 +1275,12 @@ router_settings:
   routing_strategy: "least-busy"
   allowed_fails: 2
   cooldown_time: 30
+  timeout: 600
 
 litellm_settings:
   ssl_verify: false
   default_model: "${ACTIVE_MODEL_ID}"
+  request_timeout: 600
 
 general_settings:
   master_key: "${_local_password}"
@@ -1264,6 +1290,7 @@ environment_variables:
   STORE_MODEL_IN_DB: "True"
   UI_USERNAME: "admin"
   UI_PASSWORD: "${_local_password}"
+  LITELLM_HEALTH_CHECK_TIMEOUT: "120"
 EOF
 
     chmod 0600 "${LITELLM_CONFIG}"
