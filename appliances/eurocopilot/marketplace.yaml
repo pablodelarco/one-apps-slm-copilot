@@ -2,14 +2,14 @@
 #
 # After a successful build, update these PLACEHOLDER values:
 #   1. images[0].url          -- Replace PUBLISH_URL with actual hosting URL
-#   2. images[0].checksum.md5 -- From: md5sum build/export/eurocopilot-2.0.0.qcow2
-#   3. images[0].checksum.sha256 -- From: sha256sum build/export/eurocopilot-2.0.0.qcow2
-#   4. images[0].size         -- From: qemu-img info --output=json build/export/eurocopilot-2.0.0.qcow2 | jq '.["virtual-size"]'
+#   2. images[0].checksum.md5 -- From: md5sum build/export/eurocopilot-2.7.0.qcow2
+#   3. images[0].checksum.sha256 -- From: sha256sum build/export/eurocopilot-2.7.0.qcow2
+#   4. images[0].size         -- From: qemu-img info --output=json build/export/eurocopilot-2.7.0.qcow2 | jq '.["virtual-size"]'
 #   5. Rename this file to a UUID for marketplace PR: cp marketplace.yaml $(uuidgen).yaml
 #
 ---
-name: EuroCopilot 2.0.0
-version: 2.0.0
+name: EuroCopilot 2.7.0
+version: 2.7.0
 publisher: OpenNebula Systems
 description: |-
   One-click sovereign AI coding assistant powered by
@@ -126,7 +126,7 @@ opennebula_template:
 logo: eurocopilot.png
 images:
   - name: eurocopilot_os
-    url: 'https://PUBLISH_URL/eurocopilot-2.0.0.qcow2'
+    url: 'https://PUBLISH_URL/eurocopilot-2.7.0.qcow2'
     type: OS
     dev_prefix: vd
     driver: qcow2

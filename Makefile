@@ -9,7 +9,7 @@ PACKER_DIR  := $(CURDIR)/build/packer
 # Build settings
 HEADLESS    ?= true
 VERSION     ?= 1.0.0
-IMAGE_NAME  := slm-copilot-$(VERSION).qcow2
+IMAGE_NAME  := eurocopilot-$(VERSION).qcow2
 
 # Test settings (required for 'make test')
 ENDPOINT    ?=
@@ -18,7 +18,7 @@ PASSWORD    ?=
 .PHONY: build test checksum clean lint help
 
 help:
-	@echo "SLM-Copilot Build Targets"
+	@echo "EuroCopilot Build Targets"
 	@echo "========================="
 	@echo "  make build                              Build QCOW2 image"
 	@echo "  make test ENDPOINT=... PASSWORD=...     Test running instance"
@@ -27,7 +27,7 @@ help:
 	@echo "  make lint                               Shellcheck all bash scripts"
 
 build:
-	@echo "==> Building SLM-Copilot image..."
+	@echo "==> Building EuroCopilot image..."
 	INPUT_DIR=$(INPUT_DIR) OUTPUT_DIR=$(OUTPUT_DIR) ONE_APPS_DIR=$(ONE_APPS_DIR) \
 	HEADLESS=$(HEADLESS) VERSION=$(VERSION) \
 	./build.sh
@@ -46,12 +46,12 @@ checksum: $(OUTPUT_DIR)/$(IMAGE_NAME)
 
 clean:
 	rm -rf $(OUTPUT_DIR)
-	rm -f $(PACKER_DIR)/slm-copilot-cloud-init.iso
+	rm -f $(PACKER_DIR)/eurocopilot-cloud-init.iso
 	@echo "==> Build artifacts cleaned."
 
 lint:
 	@echo "==> Running shellcheck on all bash scripts..."
-	@shellcheck -x appliances/slm-copilot/appliance.sh
+	@shellcheck -x appliances/eurocopilot/appliance.sh
 	@if [ -f build.sh ]; then shellcheck -x build.sh; fi
 	@if [ -f test.sh ]; then shellcheck -x test.sh; fi
 	@find build/packer/scripts -name '*.sh' -exec shellcheck -x {} + 2>/dev/null || true
