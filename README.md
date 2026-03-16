@@ -68,3 +68,7 @@ All variables are set via OpenNebula context and re-read on every boot.
 ## License
 
 Apache 2.0. Model: Devstral Small 2 (Apache 2.0, Mistral AI). Inference: llama.cpp (MIT).
+
+## Author
+
+Pablo del Arco, [OpenNebula Systems](https://opennebula.io).

@@ -46,3 +46,7 @@ Sovereign AI coding assistant. Runs [Devstral Small 2](https://mistral.ai/news/d
 ## License
 
 Apache 2.0. Model: Devstral Small 2 (Apache 2.0, Mistral AI).
+
+## Author
+
+Pablo del Arco, [OpenNebula Systems](https://opennebula.io).
